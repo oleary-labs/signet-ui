@@ -1,0 +1,42 @@
+{
+  "0x9DCb74c3113379dEa5c599D59F84822bB56c9a2B": {
+    "name": "Anchorage Digital",
+    "description": "Institutional-grade digital asset custody and signing infrastructure. SOC 2 Type II certified with 99.99% uptime SLA.",
+    "website": "https://anchorage.com",
+    "logo": "",
+    "category": "Custodian",
+    "apiUrl": ""
+  },
+  "0x706f883E608526629814CB4E72d91b4aaA6B5aB0": {
+    "name": "Figment",
+    "description": "Enterprise staking and web3 infrastructure. Operating validators and signing nodes across 50+ networks since 2018.",
+    "website": "https://figment.io",
+    "logo": "",
+    "category": "Infrastructure",
+    "apiUrl": ""
+  },
+  "0x9ff0ceb13605977127B0d98c9BFca5D3a3fFe0c4": {
+    "name": "Blockdaemon",
+    "description": "Blockchain infrastructure for node management and staking. Multi-cloud distributed signing with hardware security modules.",
+    "website": "https://blockdaemon.com",
+    "logo": "",
+    "category": "Infrastructure",
+    "apiUrl": ""
+  },
+  "0x57792445E5c3D1AF6130e60D4086246f36e7Cb2A": {
+    "name": "Chorus One",
+    "description": "Proof-of-stake infrastructure operator specializing in threshold cryptography and MEV-aware signing services.",
+    "website": "https://chorus.one",
+    "logo": "",
+    "category": "Validator",
+    "apiUrl": ""
+  },
+  "0x3e4eEcA7a6a62252fd92b9D55Ba8bb9FE778D7D5": {
+    "name": "InfStones",
+    "description": "Platform-as-a-service for Web3 infrastructure. 20,000+ nodes across 80+ protocols with geo-distributed signing.",
+    "website": "https://infstones.com",
+    "logo": "",
+    "category": "Platform",
+    "apiUrl": ""
+  }
+}
