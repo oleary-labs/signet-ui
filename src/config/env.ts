@@ -10,4 +10,5 @@ export const env = {
   bootstrapNodes: (process.env.NEXT_PUBLIC_BOOTSTRAP_NODES ?? "")
     .split(",")
     .filter(Boolean),
+  googleClientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "",
 } as const;

@@ -110,9 +110,9 @@ export default function CreateGroupPage() {
             The threshold is the minimum number of nodes required to
             produce a valid signature. In a{" "}
             <span className="text-primary-900 font-mono">t</span>-of-
-            <span className="text-primary-900 font-mono">n</span> scheme,
-            at least <span className="font-medium text-primary-800">t</span> nodes
-            must cooperate for every signing operation.
+            <span className="text-primary-900 font-mono">n</span> scheme,{" "}
+            <span className="font-medium text-primary-800">t</span> nodes
+            must be available at any given time.
           </p>
 
           <div className="space-y-6">
@@ -245,7 +245,7 @@ export default function CreateGroupPage() {
                 Threshold
               </h3>
               <p className="text-primary-900">
-                {threshold}-of-{groupSize} — at least {threshold} nodes must sign
+                {threshold}-of-{groupSize} — at least {threshold} nodes must be available
               </p>
             </div>
 
