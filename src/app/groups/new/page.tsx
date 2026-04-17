@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { type Address } from "viem";
 import { useSignetAuth } from "@/hooks/useSignetAuth";
+import { useSignetWrite } from "@/hooks/useSignetWrite";
 import { NodeGrid } from "@/components/marketplace/NodeGrid";
 import { loadNodeRegistry, getNodeMetadata, type NodeRegistry } from "@/lib/nodeRegistry";
+import { signetFactory } from "@/config/contracts";
 
 type WizardStep = "threshold" | "nodes" | "review" | "deploy";
 
@@ -19,6 +21,8 @@ type WizardStep = "threshold" | "nodes" | "review" | "deploy";
  */
 export default function CreateGroupPage() {
   const { isAuthenticated, signIn, status } = useSignetAuth();
+  const { write, status: deployStatus, error: deployError, txHash, reset: resetDeploy } = useSignetWrite();
+  const deployStarted = useRef(false);
 
   const [step, setStep] = useState<WizardStep>("threshold");
   const [groupSize, setGroupSize] = useState(3);
@@ -312,17 +316,147 @@ export default function CreateGroupPage() {
 
       {/* Step 4: Deploy */}
       {step === "deploy" && (
-        <div className="max-w-lg text-center">
-          <h2 className="text-lg font-semibold text-primary-900 mb-4">
-            Deploying your trust group...
+        <DeployStep
+          selectedNodes={selectedNodes}
+          threshold={threshold}
+          deployStatus={deployStatus}
+          deployError={deployError}
+          txHash={txHash}
+          deployStarted={deployStarted}
+          write={write}
+          resetDeploy={resetDeploy}
+          onBack={() => {
+            resetDeploy();
+            deployStarted.current = false;
+            setStep("review");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  idle: "Preparing...",
+  building: "Building transaction...",
+  signing: "Requesting threshold signature...",
+  submitting: "Submitting to bundler...",
+  confirming: "Waiting for on-chain confirmation...",
+  success: "Group deployed!",
+  error: "Deployment failed",
+};
+
+function DeployStep({
+  selectedNodes,
+  threshold,
+  deployStatus,
+  deployError,
+  txHash,
+  deployStarted,
+  write,
+  resetDeploy,
+  onBack,
+}: {
+  selectedNodes: Set<string>;
+  threshold: number;
+  deployStatus: string;
+  deployError: Error | null;
+  txHash: `0x${string}` | null;
+  deployStarted: React.MutableRefObject<boolean>;
+  write: ReturnType<typeof useSignetWrite>["write"];
+  resetDeploy: () => void;
+  onBack: () => void;
+}) {
+  const nodeAddrs = Array.from(selectedNodes) as Address[];
+  const removalDelay = 86400n; // 1 day
+
+  useEffect(() => {
+    if (deployStarted.current) return;
+    deployStarted.current = true;
+
+    write({
+      address: signetFactory.address,
+      abi: signetFactory.abi as Parameters<typeof write>[0]["abi"],
+      functionName: "createGroup",
+      args: [nodeAddrs, BigInt(threshold), removalDelay, [], []],
+    }).catch(() => {
+      // error is captured in deployError state
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function retry() {
+    resetDeploy();
+    deployStarted.current = false;
+  }
+
+  return (
+    <div className="max-w-lg mx-auto text-center">
+      {deployStatus === "success" ? (
+        <>
+          <div className="mb-4 flex justify-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success-500/20">
+              <svg className="h-6 w-6 text-success-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+            </div>
+          </div>
+          <h2 className="text-lg font-semibold text-primary-900 mb-2">
+            Group deployed!
+          </h2>
+          {txHash && (
+            <p className="text-sm text-neutral-500 font-mono mb-6">
+              tx: {txHash.slice(0, 10)}...{txHash.slice(-8)}
+            </p>
+          )}
+          <a
+            href="/dashboard"
+            className="inline-block rounded-lg bg-accent-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-600 transition-colors"
+          >
+            Go to Dashboard
+          </a>
+        </>
+      ) : deployStatus === "error" ? (
+        <>
+          <div className="mb-4 flex justify-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-error-500/20">
+              <svg className="h-6 w-6 text-error-500" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+          </div>
+          <h2 className="text-lg font-semibold text-primary-900 mb-2">
+            Deployment failed
+          </h2>
+          <p className="text-sm text-error-600 mb-6">
+            {deployError?.message ?? "Unknown error"}
+          </p>
+          <div className="flex justify-center gap-4">
+            <button
+              onClick={onBack}
+              className="rounded-lg border border-neutral-300 px-5 py-2.5 text-sm font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+            >
+              Back
+            </button>
+            <button
+              onClick={retry}
+              className="rounded-lg bg-accent-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-600 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mb-6 flex justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-accent-500" />
+          </div>
+          <h2 className="text-lg font-semibold text-primary-900 mb-2">
+            Deploying your trust group
           </h2>
           <p className="text-sm text-neutral-500">
-            {/* TODO: real deployment flow with UserOp submission */}
-            Deployment flow not yet connected. This will create the group
-            on-chain, provision your application key, and trigger key
-            generation.
+            {STATUS_LABELS[deployStatus] ?? "Processing..."}
           </p>
-        </div>
+        </>
       )}
     </div>
   );

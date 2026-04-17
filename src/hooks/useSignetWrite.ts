@@ -86,6 +86,7 @@ export function useSignetWrite(): UseSignetWriteReturn {
         // - send to bootstrap nodes via /v1/sign
         // - collect threshold signature
         // - attach to userOp.signature
+        throw new Error("Threshold signing not yet implemented");
 
         // 4. Submit to bundler
         setStatus("submitting");

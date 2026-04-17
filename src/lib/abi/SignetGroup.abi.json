@@ -14,38 +14,12 @@
   },
   {
     "type": "function",
-    "name": "authKeyAddDelay",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "authKeyRemovalDelay",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "cancelAddAuthKey",
+    "name": "addAuthKey",
     "inputs": [
       {
-        "name": "keyHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "pubkey",
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
     "outputs": [],
@@ -53,12 +27,17 @@
   },
   {
     "type": "function",
-    "name": "cancelAddIssuer",
+    "name": "addIssuer",
     "inputs": [
       {
-        "name": "issuerHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "issuer",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "clientIds",
+        "type": "string[]",
+        "internalType": "string[]"
       }
     ],
     "outputs": [],
@@ -79,32 +58,6 @@
   },
   {
     "type": "function",
-    "name": "cancelRemoveAuthKey",
-    "inputs": [
-      {
-        "name": "keyHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "cancelRemoveIssuer",
-    "inputs": [
-      {
-        "name": "issuerHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "declineInvite",
     "inputs": [
       {
@@ -118,64 +71,12 @@
   },
   {
     "type": "function",
-    "name": "executeAddAuthKey",
-    "inputs": [
-      {
-        "name": "keyHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "executeAddIssuer",
-    "inputs": [
-      {
-        "name": "issuerHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "executeRemoval",
     "inputs": [
       {
         "name": "node",
         "type": "address",
         "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "executeRemoveAuthKey",
-    "inputs": [
-      {
-        "name": "keyHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "executeRemoveIssuer",
-    "inputs": [
-      {
-        "name": "issuerHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
       }
     ],
     "outputs": [],
@@ -301,16 +202,6 @@
         "internalType": "address"
       },
       {
-        "name": "_issuerAddDelay",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_issuerRemovalDelay",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
         "name": "_initialIssuers",
         "type": "tuple[]",
         "internalType": "struct ISignetGroup.InitialIssuer[]",
@@ -326,16 +217,6 @@
             "internalType": "string[]"
           }
         ]
-      },
-      {
-        "name": "_authKeyAddDelay",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_authKeyRemovalDelay",
-        "type": "uint256",
-        "internalType": "uint256"
       },
       {
         "name": "_initialAuthKeys",
@@ -417,32 +298,6 @@
   },
   {
     "type": "function",
-    "name": "issuerAddDelay",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "issuerRemovalDelay",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "manager",
     "inputs": [],
     "outputs": [
@@ -475,69 +330,12 @@
   },
   {
     "type": "function",
-    "name": "queueAddAuthKey",
-    "inputs": [
-      {
-        "name": "pubkey",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "queueAddIssuer",
-    "inputs": [
-      {
-        "name": "issuer",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "clientIds",
-        "type": "string[]",
-        "internalType": "string[]"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "queueRemoval",
     "inputs": [
       {
         "name": "node",
         "type": "address",
         "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "queueRemoveAuthKey",
-    "inputs": [
-      {
-        "name": "keyHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "queueRemoveIssuer",
-    "inputs": [
-      {
-        "name": "issuerHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
       }
     ],
     "outputs": [],
@@ -602,6 +400,32 @@
   },
   {
     "type": "function",
+    "name": "removeAuthKey",
+    "inputs": [
+      {
+        "name": "keyHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "removeIssuer",
+    "inputs": [
+      {
+        "name": "issuerHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "threshold",
     "inputs": [],
     "outputs": [
@@ -628,44 +452,6 @@
   },
   {
     "type": "event",
-    "name": "AuthKeyAddCancelled",
-    "inputs": [
-      {
-        "name": "keyHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "AuthKeyAddQueued",
-    "inputs": [
-      {
-        "name": "keyHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "pubkey",
-        "type": "bytes",
-        "indexed": false,
-        "internalType": "bytes"
-      },
-      {
-        "name": "executeAfter",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "AuthKeyAdded",
     "inputs": [
       {
@@ -679,38 +465,6 @@
         "type": "bytes",
         "indexed": false,
         "internalType": "bytes"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "AuthKeyRemovalCancelled",
-    "inputs": [
-      {
-        "name": "keyHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "AuthKeyRemovalQueued",
-    "inputs": [
-      {
-        "name": "keyHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "executeAfter",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -749,50 +503,6 @@
   },
   {
     "type": "event",
-    "name": "IssuerAddCancelled",
-    "inputs": [
-      {
-        "name": "h",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "IssuerAddQueued",
-    "inputs": [
-      {
-        "name": "h",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "issuer",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
-      },
-      {
-        "name": "clientIds",
-        "type": "string[]",
-        "indexed": false,
-        "internalType": "string[]"
-      },
-      {
-        "name": "executeAfter",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "IssuerAdded",
     "inputs": [
       {
@@ -812,38 +522,6 @@
         "type": "string[]",
         "indexed": false,
         "internalType": "string[]"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "IssuerRemovalCancelled",
-    "inputs": [
-      {
-        "name": "h",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "IssuerRemovalQueued",
-    "inputs": [
-      {
-        "name": "h",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "executeAfter",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
       }
     ],
     "anonymous": false

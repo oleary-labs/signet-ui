@@ -45,16 +45,6 @@
         "internalType": "uint256"
       },
       {
-        "name": "issuerAddDelay",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "issuerRemovalDelay",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
         "name": "initialIssuers",
         "type": "tuple[]",
         "internalType": "struct ISignetGroup.InitialIssuer[]",
@@ -70,16 +60,6 @@
             "internalType": "string[]"
           }
         ]
-      },
-      {
-        "name": "authKeyAddDelay",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "authKeyRemovalDelay",
-        "type": "uint256",
-        "internalType": "uint256"
       },
       {
         "name": "initialAuthKeys",
