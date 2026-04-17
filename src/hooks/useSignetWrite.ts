@@ -5,13 +5,21 @@ import {
   type Address,
   type Hex,
   encodeFunctionData,
+  createPublicClient,
+  http,
+  concat,
   type Abi,
 } from "viem";
 import { useSignetAuth } from "./useSignetAuth";
-import { buildUserOp } from "@/lib/userOp";
-import { sendUserOp, getUserOpReceipt } from "@/lib/bundler";
+import { sessionKeyMaterial } from "@/providers/signetAuth";
+import { buildUserOp, getUserOpHash } from "@/lib/userOp";
+import { sendUserOp, getUserOpReceipt, estimateUserOpGas } from "@/lib/bundler";
+import { signSignRequest } from "@/lib/signet-sdk/request";
+import { signetAccountFactory } from "@/config/contracts";
+import { getActiveChain } from "@/config/chains";
+import { env } from "@/config/env";
 
-type WriteStatus = "idle" | "building" | "signing" | "submitting" | "confirming" | "success" | "error";
+type WriteStatus = "idle" | "building" | "estimating" | "signing" | "submitting" | "confirming" | "success" | "error";
 
 interface UseSignetWriteReturn {
   write: (params: {
@@ -40,7 +48,7 @@ interface UseSignetWriteReturn {
  * 5. Poll for on-chain confirmation
  */
 export function useSignetWrite(): UseSignetWriteReturn {
-  const { account } = useSignetAuth();
+  const { account, claims, groupPublicKey } = useSignetAuth();
   const [status, setStatus] = useState<WriteStatus>("idle");
   const [error, setError] = useState<Error | null>(null);
   const [txHash, setTxHash] = useState<Hex | null>(null);
@@ -70,23 +78,92 @@ export function useSignetWrite(): UseSignetWriteReturn {
           args: params.args ?? [],
         } as Parameters<typeof encodeFunctionData>[0]);
 
-        // 2. Build the UserOperation
+        // 2. Check if account is deployed; if not, build initCode
+        let initCode: Hex = "0x";
+        const client = createPublicClient({
+          chain: getActiveChain(),
+          transport: http(env.rpcUrl),
+        });
+
+        // Fetch nonce from EntryPoint
+        const nonce = await client.readContract({
+          address: env.entryPointAddress,
+          abi: [{
+            name: "getNonce",
+            type: "function",
+            inputs: [
+              { name: "sender", type: "address" },
+              { name: "key", type: "uint192" },
+            ],
+            outputs: [{ type: "uint256" }],
+            stateMutability: "view",
+          }],
+          functionName: "getNonce",
+          args: [account, 0n],
+        }) as bigint;
+
+        const code = await client.getCode({ address: account });
+        if (!code || code === "0x") {
+          if (!groupPublicKey) throw new Error("No group public key available for account deployment");
+          const factoryCallData = encodeFunctionData({
+            abi: signetAccountFactory.abi,
+            functionName: "createAccount",
+            args: [env.entryPointAddress, groupPublicKey, 0n],
+          } as Parameters<typeof encodeFunctionData>[0]);
+          initCode = concat([signetAccountFactory.address, factoryCallData]);
+        }
+
         const userOp = buildUserOp({
           sender: account,
-          nonce: 0n, // TODO: fetch from EntryPoint
+          nonce,
+          initCode,
           dest: params.address,
           value: params.value,
           callData,
         });
 
+        // 2b. Estimate gas via bundler (pre-flight validation)
+        setStatus("estimating");
+        const gasEstimate = await estimateUserOpGas(userOp);
+        userOp.accountGasLimits =
+          `0x${BigInt(gasEstimate.verificationGasLimit).toString(16).padStart(32, "0")}${BigInt(gasEstimate.callGasLimit).toString(16).padStart(32, "0")}` as Hex;
+        userOp.preVerificationGas = BigInt(gasEstimate.preVerificationGas);
+
         // 3. Sign via bootstrap group
         setStatus("signing");
-        // TODO: implement threshold signing flow
-        // - compute userOpHash
-        // - send to bootstrap nodes via /v1/sign
-        // - collect threshold signature
-        // - attach to userOp.signature
-        throw new Error("Threshold signing not yet implemented");
+        if (!claims) throw new Error("No auth claims available");
+        if (!sessionKeyMaterial.keypair) throw new Error("No session keypair available");
+
+        const opHash = getUserOpHash(userOp, env.entryPointAddress, env.chainId);
+        const messageHash = new Uint8Array(
+          (opHash.slice(2).match(/.{2}/g) ?? []).map((b) => parseInt(b, 16))
+        );
+
+        const signReq = await signSignRequest(
+          sessionKeyMaterial.keypair,
+          claims,
+          env.bootstrapGroup,
+          messageHash,
+        );
+
+        // Send to first bootstrap node via proxy
+        const signRes = await fetch("/api/node/proxy", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-node-url": env.bootstrapNodes[0],
+            "x-node-path": "/v1/sign",
+          },
+          body: JSON.stringify(signReq),
+        });
+
+        if (!signRes.ok) {
+          const body = await signRes.text();
+          throw new Error(`Threshold signing failed: ${signRes.status} — ${body}`);
+        }
+
+        const { ethereum_signature } = await signRes.json();
+        userOp.signature = ethereum_signature as Hex;
 
         // 4. Submit to bundler
         setStatus("submitting");

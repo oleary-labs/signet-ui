@@ -7,7 +7,9 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { type Address } from "viem";
+import { type Address, type Hex, createPublicClient, http } from "viem";
+import { getActiveChain } from "@/config/chains";
+import { signetAccountFactory } from "@/config/contracts";
 import {
   startGoogleOAuth,
   decodeIdToken,
@@ -41,6 +43,7 @@ export interface SignetAuthState {
   status: AuthStatus;
   isAuthenticated: boolean;
   account: Address | null;
+  groupPublicKey: Hex | null;
   idToken: string | null;
   claims: IdTokenClaims | null;
   sessionPub: string | null;
@@ -54,6 +57,7 @@ export const SignetAuthContext = createContext<SignetAuthState | null>(null);
 export function SignetAuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("idle");
   const [account, setAccount] = useState<Address | null>(null);
+  const [groupPublicKey, setGroupPublicKey] = useState<Hex | null>(null);
   const [idToken, setIdToken] = useState<string | null>(null);
   const [claims, setClaims] = useState<IdTokenClaims | null>(null);
   const [sessionPub, setSessionPub] = useState<string | null>(null);
@@ -117,17 +121,35 @@ export function SignetAuthProvider({ children }: { children: ReactNode }) {
         } else {
           console.log("[signet-auth] key created:", keygenResult.keyId, keygenResult.ethereumAddress);
         }
-      }
 
-      // TODO: derive real SignetAccount address from factory
-      const subHash = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(`${decoded.iss}:${decoded.sub}`)
-      );
-      const hashHex = Array.from(new Uint8Array(subHash))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-      setAccount(`0x${hashHex.slice(0, 40)}` as Address);
+        // Derive the counterfactual SignetAccount address from the account factory
+        const gpk = keygenResult.groupPublicKey as Hex;
+        setGroupPublicKey(gpk);
+        sessionStorage.setItem("signet_group_public_key", gpk);
+
+        const client = createPublicClient({
+          chain: getActiveChain(),
+          transport: http(env.rpcUrl),
+        });
+        const counterfactualAddr = await client.readContract({
+          address: signetAccountFactory.address,
+          abi: signetAccountFactory.abi,
+          functionName: "getAddress",
+          args: [env.entryPointAddress, gpk, 0n],
+        });
+        setAccount(counterfactualAddr as Address);
+        console.log("[signet-auth] counterfactual account:", counterfactualAddr);
+      } else {
+        // No bootstrap nodes — fall back to hash-based address
+        const subHash = await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(`${decoded.iss}:${decoded.sub}`)
+        );
+        const hashHex = Array.from(new Uint8Array(subHash))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+        setAccount(`0x${hashHex.slice(0, 40)}` as Address);
+      }
 
       setStatus("authenticated");
     } catch (err) {
@@ -156,12 +178,14 @@ export function SignetAuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => {
     setAccount(null);
+    setGroupPublicKey(null);
     setIdToken(null);
     setClaims(null);
     setSessionPub(null);
     setStatus("idle");
     setError(null);
     sessionStorage.removeItem("signet_id_token");
+    sessionStorage.removeItem("signet_group_public_key");
     sessionKeyMaterial.keypair = null;
   }, []);
 
@@ -171,6 +195,7 @@ export function SignetAuthProvider({ children }: { children: ReactNode }) {
         status,
         isAuthenticated: status === "authenticated",
         account,
+        groupPublicKey,
         idToken,
         claims,
         sessionPub,

@@ -339,6 +339,7 @@ export default function CreateGroupPage() {
 const STATUS_LABELS: Record<string, string> = {
   idle: "Preparing...",
   building: "Building transaction...",
+  estimating: "Estimating gas...",
   signing: "Requesting threshold signature...",
   submitting: "Submitting to bundler...",
   confirming: "Waiting for on-chain confirmation...",

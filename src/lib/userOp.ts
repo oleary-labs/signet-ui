@@ -2,7 +2,8 @@ import {
   type Address,
   type Hex,
   encodeFunctionData,
-  type EncodeFunctionDataParameters,
+  encodeAbiParameters,
+  keccak256,
 } from "viem";
 
 /**
@@ -33,6 +34,7 @@ export interface PackedUserOperation {
 export function buildUserOp(params: {
   sender: Address;
   nonce: bigint;
+  initCode?: Hex;
   dest: Address;
   value?: bigint;
   callData: Hex;
@@ -58,12 +60,12 @@ export function buildUserOp(params: {
   return {
     sender: params.sender,
     nonce: params.nonce,
-    initCode: "0x",
+    initCode: params.initCode ?? "0x",
     callData: executeCallData,
     // Placeholder gas limits — will be estimated by the bundler
-    accountGasLimits: "0x00000000000000000000000000030d4000000000000000000000000000030d40",
+    accountGasLimits: "0x000000000000000000000000000f4240000000000000000000000000001e8480",
     preVerificationGas: 50000n,
-    gasFees: "0x00000000000000000000000000000001000000000000000000000000003b9aca00",
+    gasFees: "0x000000000000000000000000000000010000000000000000000000003b9aca00",
     paymasterAndData: "0x",
     signature: "0x",
   };
@@ -75,12 +77,50 @@ export function buildUserOp(params: {
  * This matches the hash computed by the EntryPoint, which is what
  * SignetAccount.validateUserOp verifies the FROST signature against.
  */
+/**
+ * Compute the UserOperation hash for signing.
+ *
+ * This matches the hash computed by EntryPoint v0.7 for packed UserOperations:
+ *   keccak256(abi.encode(keccak256(packedFields), entryPoint, chainId))
+ *
+ * The inner hash covers all fields except signature:
+ *   keccak256(abi.encode(sender, nonce, keccak256(initCode), keccak256(callData),
+ *     accountGasLimits, preVerificationGas, gasFees, keccak256(paymasterAndData)))
+ */
 export function getUserOpHash(
   userOp: PackedUserOperation,
   entryPoint: Address,
   chainId: number
 ): Hex {
-  // TODO: implement full ERC-4337 hash computation
-  // keccak256(abi.encode(pack(userOp), entryPoint, chainId))
-  throw new Error("Not yet implemented — requires full packing logic");
+  const packedHash = keccak256(
+    encodeAbiParameters(
+      [
+        { type: "address" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        userOp.sender,
+        userOp.nonce,
+        keccak256(userOp.initCode),
+        keccak256(userOp.callData),
+        userOp.accountGasLimits as Hex,
+        userOp.preVerificationGas,
+        userOp.gasFees as Hex,
+        keccak256(userOp.paymasterAndData),
+      ]
+    )
+  );
+
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "address" }, { type: "uint256" }],
+      [packedHash, entryPoint, BigInt(chainId)]
+    )
+  );
 }

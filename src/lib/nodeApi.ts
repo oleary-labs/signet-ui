@@ -34,7 +34,7 @@ export interface AuthRequest {
 export interface SignRequest {
   group_id: string;
   key_id: string;
-  message: string;
+  message_hash: string;
   session_pub: string;
   request_sig: string;
   nonce: string;

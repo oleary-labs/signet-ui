@@ -23,7 +23,7 @@ export interface SignedRequest {
 
 /** Signed request with message_hash for /v1/sign. */
 export interface SignedSignRequest extends SignedRequest {
-  message: string;
+  message_hash: string;
 }
 
 /**
@@ -95,7 +95,7 @@ export async function signSignRequest(
     request_sig: bytesToHex(sig),
     nonce,
     timestamp,
-    message: bytesToHex(messageHash),
+    message_hash: bytesToHex(messageHash),
   };
 }
 

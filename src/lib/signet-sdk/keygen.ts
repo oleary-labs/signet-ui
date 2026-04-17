@@ -19,6 +19,7 @@ export interface KeygenConfig {
 export interface KeygenResult {
   keyId: string;
   ethereumAddress: string;
+  groupPublicKey: string;
   alreadyExisted: boolean;
 }
 
@@ -55,11 +56,12 @@ export async function keygen(
   });
 
   if (res.status === 409) {
-    // Key already exists — that's fine
-    const keyId = `${claims.iss}:${claims.sub}${keySuffix ? `:${keySuffix}` : ""}`;
+    // Key already exists — node now returns full key info on 409
+    const data = await res.json();
     return {
-      keyId,
-      ethereumAddress: "", // unknown for existing keys from this response
+      keyId: data.key_id ?? `${claims.iss}:${claims.sub}${keySuffix ? `:${keySuffix}` : ""}`,
+      ethereumAddress: data.ethereum_address ?? "",
+      groupPublicKey: data.public_key ?? "",
       alreadyExisted: true,
     };
   }
@@ -73,6 +75,7 @@ export async function keygen(
   return {
     keyId: data.key_id,
     ethereumAddress: data.ethereum_address,
+    groupPublicKey: data.public_key,
     alreadyExisted: false,
   };
 }

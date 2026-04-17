@@ -13,6 +13,7 @@ const otherChains = [foundry, sepolia, baseSepolia].filter(c => c.id !== activeC
 
 const wagmiConfig = createConfig({
   chains: [activeChain, ...otherChains] as [typeof activeChain, ...(typeof otherChains)],
+  batch: { multicall: env.chainId === foundry.id ? false : true },
   transports: {
     [foundry.id]: http(env.rpcUrl),
     [sepolia.id]: http(env.rpcUrl),
