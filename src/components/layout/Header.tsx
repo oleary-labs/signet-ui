@@ -9,6 +9,7 @@ const STATUS_LABELS: Partial<Record<AuthStatus, string>> = {
   "session-key": "Generating session key...",
   proving: "Generating zero-knowledge proof...",
   registering: "Registering with network...",
+  keygen: "Preparing signing key...",
 };
 
 export function Header() {
@@ -18,7 +19,8 @@ export function Header() {
     status === "oauth" ||
     status === "session-key" ||
     status === "proving" ||
-    status === "registering";
+    status === "registering" ||
+    status === "keygen";
 
   return (
     <header className="border-b border-neutral-200 bg-white">
@@ -110,7 +112,7 @@ function AuthProgress({ status }: { status: AuthStatus }) {
         </span>
         {isProving && (
           <span className="text-xs text-neutral-400">
-            Proving JWT validity without revealing credentials
+            Proving OAuth validity without revealing credentials
           </span>
         )}
       </div>

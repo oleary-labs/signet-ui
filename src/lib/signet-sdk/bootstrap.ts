@@ -11,6 +11,8 @@ import { bytesToHex } from "./session";
 export interface BootstrapConfig {
   groupId: string; // bootstrap group contract address
   nodeUrls: string[]; // bootstrap node API URLs
+  /** Proxy endpoint for CORS — if set, requests go through this instead of directly to nodes */
+  proxyEndpoint?: string;
 }
 
 export interface AuthResult {
@@ -45,7 +47,9 @@ export async function authenticateWithBootstrap(
 
   // Auth with all nodes in parallel
   const results = await Promise.allSettled(
-    config.nodeUrls.map((url) => authWithNode(url, request))
+    config.nodeUrls.map((url) =>
+      authWithNode(url, request, config.proxyEndpoint)
+    )
   );
 
   // Check that at least one succeeded
@@ -75,11 +79,21 @@ export async function authenticateWithBootstrap(
 
 async function authWithNode(
   baseUrl: string,
-  request: NodeAuthRequest
+  request: NodeAuthRequest,
+  proxyEndpoint?: string
 ): Promise<AuthResult> {
-  const res = await fetch(`${baseUrl}/v1/auth`, {
+  const url = proxyEndpoint ?? `${baseUrl}/v1/auth`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (proxyEndpoint) {
+    headers["x-node-url"] = baseUrl;
+    headers["x-node-path"] = "/v1/auth";
+  }
+
+  const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(request),
   });
 

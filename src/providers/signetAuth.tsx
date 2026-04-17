@@ -18,6 +18,7 @@ import {
   type IdTokenClaims,
   type SessionKeypair,
 } from "@/lib/signet-sdk";
+import { keygen } from "@/lib/signet-sdk/keygen";
 import { env } from "@/config/env";
 
 /**
@@ -32,6 +33,7 @@ export type AuthStatus =
   | "session-key"     // generating ephemeral keypair
   | "proving"         // generating ZK proof (2-7s, the headline moment)
   | "registering"     // posting proof to bootstrap nodes
+  | "keygen"          // ensuring key shard exists
   | "authenticated"
   | "error";
 
@@ -91,12 +93,30 @@ export function SignetAuthProvider({ children }: { children: ReactNode }) {
           {
             groupId: env.bootstrapGroup,
             nodeUrls: env.bootstrapNodes,
+            proxyEndpoint: "/api/node/proxy",
           },
           proof,
           keypair.publicKeyHex,
           decoded,
           modulusBytes
         );
+
+        // Ensure a key shard exists for this identity
+        setStatus("keygen");
+        const keygenResult = await keygen(
+          {
+            groupId: env.bootstrapGroup,
+            nodeUrls: env.bootstrapNodes,
+            proxyEndpoint: "/api/node/proxy",
+          },
+          keypair,
+          decoded
+        );
+        if (keygenResult.alreadyExisted) {
+          console.log("[signet-auth] key already exists:", keygenResult.keyId);
+        } else {
+          console.log("[signet-auth] key created:", keygenResult.keyId, keygenResult.ethereumAddress);
+        }
       }
 
       // TODO: derive real SignetAccount address from factory

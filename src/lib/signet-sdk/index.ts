@@ -16,4 +16,6 @@ export * from "./jwks";
 export * from "./witness";
 export * from "./proof";
 export * from "./bootstrap";
+export * from "./request";
+export * from "./keygen";
 export { generateInputs, splitBigIntToChunks } from "./generate-inputs";
