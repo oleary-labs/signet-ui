@@ -165,4 +165,4 @@ npm run dev
 - Use `Address` type from viem for all Ethereum addresses
 - Node API URLs come from the off-chain registry (`apiUrl` field) or env config for bootstrap nodes
 - Time-locked operations have a queue → wait → execute pattern; the UI should show countdowns
-- The word "threshold" in Signet means max corrupted nodes (quorum = threshold + 1). Be precise.
+- The word "threshold" in Signet means the minimum number of nodes required to produce a valid signature (the standard FROST meaning). Quorum = threshold. Be precise.

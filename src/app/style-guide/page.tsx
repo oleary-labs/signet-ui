@@ -334,7 +334,7 @@ export default function StyleGuidePage() {
           {/* Dark card — info */}
           <div className="rounded-xl border border-primary-700 bg-primary-900 p-6">
             <p className="text-sm font-medium text-primary-300 mb-2">Configuration</p>
-            <p className="text-primary-50 font-mono">3-of-5 (threshold: 2)</p>
+            <p className="text-primary-50 font-mono">3-of-5 (threshold: 3)</p>
           </div>
         </div>
       </section>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { type Address } from "viem";
 import { useSignetAuth } from "@/hooks/useSignetAuth";
 import { NodeGrid } from "@/components/marketplace/NodeGrid";
+import { loadNodeRegistry, getNodeMetadata, type NodeRegistry } from "@/lib/nodeRegistry";
 
 type WizardStep = "threshold" | "nodes" | "review" | "deploy";
 
@@ -23,6 +24,11 @@ export default function CreateGroupPage() {
   const [groupSize, setGroupSize] = useState(3);
   const [threshold, setThreshold] = useState(Math.floor(3 / 2) + 1);
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
+  const [registry, setRegistry] = useState<NodeRegistry>({});
+
+  useEffect(() => {
+    loadNodeRegistry().then(setRegistry);
+  }, []);
 
   const faultTolerance = groupSize - threshold;
 
@@ -123,7 +129,7 @@ export default function CreateGroupPage() {
               <input
                 type="range"
                 min={1}
-                max={10}
+                max={7}
                 value={groupSize}
                 onChange={(e) => {
                   const n = Number(e.target.value);
@@ -135,7 +141,7 @@ export default function CreateGroupPage() {
               <div className="flex justify-between text-xs text-neutral-400 mt-1">
                 <span>1</span>
                 <span className="text-primary-900 font-medium">{groupSize} {groupSize === 1 ? "node" : "nodes"}</span>
-                <span>10</span>
+                <span>7</span>
               </div>
             </div>
 
@@ -254,11 +260,23 @@ export default function CreateGroupPage() {
                 Selected Providers
               </h3>
               <div className="space-y-2">
-                {Array.from(selectedNodes).map((addr) => (
-                  <p key={addr} className="text-primary-900 font-mono text-sm">
-                    {addr}
-                  </p>
-                ))}
+                {Array.from(selectedNodes).map((addr) => {
+                  const meta = getNodeMetadata(registry, addr);
+                  return (
+                    <p key={addr} className="text-primary-900 text-sm">
+                      {meta?.name ? (
+                        <>
+                          <span className="font-medium">{meta.name}</span>{" "}
+                          <span className="font-mono text-neutral-400">
+                            ({addr.slice(0, 6)}...{addr.slice(-4)})
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-mono">{addr}</span>
+                      )}
+                    </p>
+                  );
+                })}
               </div>
             </div>
 

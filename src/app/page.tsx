@@ -7,7 +7,7 @@ export default function MarketplacePage() {
       {/* Hero */}
       <div className="mb-16 max-w-3xl">
         <h1 className="text-4xl font-bold tracking-tight text-primary-900 sm:text-5xl">
-          Share the trust. Keep the control.
+          Split the trust. Keep the control.
         </h1>
         <p className="mt-4 text-lg text-neutral-500">
           Add social login key management to your application. Browse trusted
