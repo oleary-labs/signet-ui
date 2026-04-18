@@ -49,10 +49,10 @@ export default function CreateGroupPage() {
         </p>
         <button
           onClick={signIn}
-          disabled={status === "authenticating"}
+          disabled={status === "oauth"}
           className="mt-8 rounded-lg bg-accent-500 px-6 py-3 text-sm font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
         >
-          {status === "authenticating" ? "Signing in..." : "Sign In to Continue"}
+          {status === "oauth" ? "Signing in..." : "Sign In to Continue"}
         </button>
       </div>
     );
@@ -339,7 +339,9 @@ export default function CreateGroupPage() {
 const STATUS_LABELS: Record<string, string> = {
   idle: "Preparing...",
   building: "Building transaction...",
+  "sponsoring-stub": "Requesting sponsorship...",
   estimating: "Estimating gas...",
+  sponsoring: "Finalizing sponsorship...",
   signing: "Requesting threshold signature...",
   submitting: "Submitting to bundler...",
   confirming: "Waiting for on-chain confirmation...",

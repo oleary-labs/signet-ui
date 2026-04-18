@@ -36,9 +36,25 @@ This is NOT a standard wagmi "connect wallet" app. Users authenticate via **soci
 
 - wagmi is used for **read-only contract calls** (useReadContract, useReadContracts) and chain configuration
 - wagmi is NOT used for transaction signing
-- All write operations go through: **construct UserOp → FROST threshold sign via bootstrap group → submit to bundler → EntryPoint executes**
+- All write operations go through: **construct UserOp → (optional) paymaster sponsorship via ERC-7677 → FROST threshold sign via bootstrap group → submit to bundler → EntryPoint executes**
 - `useSignetWrite` replaces wagmi's `useWriteContract`
 - `SignetAuthProvider` manages the OAuth → session key → SignetAccount lifecycle
+
+### Write flow ordering (matters — see useSignetWrite.ts)
+The UserOp is constructed, optionally paymaster-sponsored, then FROST-signed. The ordering is strict because two signatures cover overlapping fields:
+
+1. `buildUserOp` — unsigned op with placeholder gas
+2. (if `usePaymaster`) `pm_getPaymasterStubData` → attach stub `paymasterAndData` (so gas estimation accounts for paymaster verification)
+3. `eth_estimateUserOperationGas` → overwrite `accountGasLimits`, `preVerificationGas`
+4. (if `usePaymaster`) `pm_getPaymasterData` → replace stub with real signed blob (paymaster signs over finalized gas fields)
+5. `getUserOpHash` → hash covers `paymasterAndData` (so must be final)
+6. FROST threshold sign via bootstrap group → fill `signature`
+7. `eth_sendUserOperation` → bundler submits to EntryPoint
+
+**Reordering footguns**: changing gas after step 4 invalidates the paymaster signature; changing `paymasterAndData` after step 6 invalidates the FROST signature.
+
+### Paymaster packing quirk
+signet-min-bundler's `FromRPC` concatenates `paymaster` + `paymasterData` directly into `paymasterAndData` — it does NOT re-insert the packed gas limits between them. But the on-chain paymaster `getHash` reads `paymasterAndData[20:52]` as `(verificationGasLimit ‖ postOpGasLimit)`. So `applyPaymasterSponsorship` in `lib/bundler.ts` produces `[paymaster:20][verifGas:16][postOpGas:16][paymasterData:rest]` and the `paymasterData` field sent to the bundler already includes the packed gas limits. Do not try to "simplify" this without also updating the bundler's wire format.
 
 ### Bootstrap group
 A Signet-managed signing group that exists before the Console launches. It:
@@ -132,10 +148,13 @@ See `docs/TODO.md` for a detailed tracker. The short version:
 - Bundler client (sendUserOp, getUserOpReceipt)
 - UserOp construction (buildUserOp)
 
+**Recently implemented** (was stubbed):
+- `SignetAuthProvider` — full OAuth → session key → ZK proof of JWT → bootstrap registration → keygen → counterfactual SignetAccount address flow
+- `useSignetWrite` — full build → (paymaster) → estimate → (paymaster) → FROST sign → submit → confirm pipeline
+- `getUserOpHash` — EntryPoint v0.7 packed hash
+- `useSignetWrite` paymaster wiring — ERC-7677 stub/real sponsorship, opt-in via `NEXT_PUBLIC_USE_PAYMASTER`
+
 **Stubbed / TODO:**
-- `SignetAuthProvider` — OAuth flow, session key gen, bootstrap group auth (returns "not implemented")
-- `useSignetWrite` — UserOp signing via bootstrap group (builds the op, but can't sign it yet)
-- `getUserOpHash` — full ERC-4337 hash computation (throws "not implemented")
 - `NodeGrid` → `NodeCardWithData` — doesn't yet fetch on-chain NodeInfo or off-chain metadata per node
 - Dashboard — doesn't yet walk factory groups and filter by manager
 - Group detail — OAuth issuer and auth key sections are placeholder text
@@ -145,18 +164,22 @@ See `docs/TODO.md` for a detailed tracker. The short version:
 
 ## Build & dev
 
+This repo uses `bun` as the package manager and runner. `npm` also works but `bun` is the convention.
+
 ```bash
-npm install
+bun install
 cp .env.local.example .env.local  # then fill in addresses
-npm run dev                        # starts on localhost:3000
-npm run build                      # production build
+bun dev                           # starts on localhost:3000
+bun run build                     # production build
 ```
 
-For local development with the devnet:
+For local development with the devnet, see `docs/devnet-e2e.md` for the full end-to-end walkthrough (protocol devnet + bundler + paymaster + UI). Short version:
+
 ```bash
-cd ../signet-protocol && devnet/start.sh   # starts Anvil + deploys contracts + runs 3 nodes
-# Copy addresses from devnet output into .env.local
-npm run dev
+cd ../signet-protocol && devnet/start.sh --no-kms --auth   # Anvil + contracts + 3 nodes + bootstrap group
+cd ../signet-min-bundler && scripts/devnet-setup.sh         # paymaster + bundler config
+# Then start the bundler, copy addresses into signet-ui/.env.local, and:
+bun dev
 ```
 
 ## Conventions

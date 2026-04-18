@@ -12,4 +12,9 @@ export const env = {
     .split(",")
     .filter(Boolean),
   googleClientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "",
+  // Paymaster sponsorship (ERC-7677). When usePaymaster is false, UserOps
+  // are sent without paymaster fields — the SignetAccount must fund its own
+  // gas. This is useful on local devnet where no paymaster is deployed.
+  paymasterAddress: (process.env.NEXT_PUBLIC_PAYMASTER_ADDRESS ?? "0x") as Address,
+  usePaymaster: process.env.NEXT_PUBLIC_USE_PAYMASTER === "true",
 } as const;

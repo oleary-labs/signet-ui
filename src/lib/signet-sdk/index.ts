@@ -18,4 +18,5 @@ export * from "./proof";
 export * from "./bootstrap";
 export * from "./request";
 export * from "./keygen";
+export * from "./userop";
 export { generateInputs, splitBigIntToChunks } from "./generate-inputs";

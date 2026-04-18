@@ -42,14 +42,17 @@
 ## TODO
 
 ### Critical path — auth flow
-These must be implemented for the app to be functional end-to-end.
+Implemented across `providers/signetAuth.tsx`, `hooks/useSignetWrite.ts`, `lib/signet-sdk/*`, `lib/userOp.ts`, `lib/bundler.ts`.
 
-- [ ] **OAuth integration** — Add OAuth provider (Google, etc.) flow in `SignetAuthProvider`. Need to pick an OAuth library and configure the redirect flow. The OAuth token is sent to the bootstrap group's nodes, not validated locally.
-- [ ] **Session key generation** — Generate an ephemeral secp256k1 keypair on sign-in. Use `@noble/secp256k1` (already installed). Store the session private key in memory only (never persisted).
-- [ ] **Bootstrap group auth** — POST the OAuth token + session public key to each bootstrap node's `/v1/auth` endpoint. All nodes need to register the session.
-- [ ] **SignetAccount resolution** — After auth, determine the user's SignetAccount address. For new users, this requires deploying an account (UserOp with initCode). For returning users, derive the counterfactual address.
-- [ ] **`getUserOpHash` implementation** — Full ERC-4337 hash computation: `keccak256(abi.encode(pack(userOp), entryPoint, chainId))`. Reference: the EntryPoint contract's `getUserOpHash` function. Currently throws "not implemented."
-- [ ] **Threshold signing in `useSignetWrite`** — After building the UserOp and computing its hash, send the hash to bootstrap nodes via `/v1/sign`, collect the FROST signature, and attach it to `userOp.signature`.
+- [x] **OAuth integration** — Google OAuth PKCE via `signet-sdk/oauth.ts`
+- [x] **Session key generation** — ephemeral secp256k1 keypair via `signet-sdk/session.ts`; in-memory only (`sessionKeyMaterial`)
+- [x] **Bootstrap group auth** — ZK-proof-of-JWT + session pubkey posted to each bootstrap node (`signet-sdk/bootstrap.ts`)
+- [x] **SignetAccount resolution** — counterfactual address via `SignetAccountFactory.getAddress(entryPoint, groupPublicKey, 0)`; first write deploys via `initCode`
+- [x] **`getUserOpHash`** — EntryPoint v0.7 packed hash in `lib/userOp.ts`
+- [x] **Threshold signing in `useSignetWrite`** — session-signed `/v1/sign` to a bootstrap node; 65-byte FROST Schnorr sig attached to `userOp.signature`
+- [x] **Paymaster sponsorship (ERC-7677)** — opt-in `pm_getPaymasterStubData` / `pm_getPaymasterData`, gated by `NEXT_PUBLIC_USE_PAYMASTER`, packed into `paymasterAndData` by `applyPaymasterSponsorship`
+- [x] **UserOp nonce** — fetched from `EntryPoint.getNonce(sender, 0)` in `useSignetWrite`
+- [x] **Gas estimation** — `eth_estimateUserOperationGas` called pre-sign; paymaster stub attached first so estimate includes paymaster verification
 
 ### Group creation flow
 - [ ] **Deploy step** — Connect the wizard's deploy step to real UserOp submission. Call `SignetFactory.createGroup` via `useSignetWrite`.
@@ -75,10 +78,6 @@ These must be implemented for the app to be functional end-to-end.
 - [ ] **Invite node action** — Form to invite a new node by address.
 - [ ] **Node health indicators** — Show health status on each node in the membership list (requires API URL from registry).
 
-### Node API nonce management
-- [ ] **UserOp nonce** — Fetch the current nonce from the EntryPoint contract for the sender's SignetAccount. Currently hardcoded to `0n`.
-- [ ] **Gas estimation** — Call the bundler's `eth_estimateUserOperationGas` before signing. Currently uses placeholder values.
-
 ### Infrastructure
 - [ ] **Google Fonts** — Add Inter and JetBrains Mono font files locally (Google Fonts import was removed due to build issues in sandboxed env). Or use `next/font/google` once building in a network-enabled env.
 - [ ] **Error boundaries** — Add React error boundaries around contract reads and node API calls.
@@ -86,7 +85,6 @@ These must be implemented for the app to be functional end-to-end.
 - [ ] **Mobile responsiveness** — The grid and wizard need mobile layout testing.
 
 ### Future (from design doc open questions)
-- [ ] Paymaster for sponsored account creation gas
 - [ ] Decentralized node metadata (IPFS, ENS, or on-chain registry)
 - [ ] Multi-account management
 - [ ] OAuth issuer setup in creation wizard

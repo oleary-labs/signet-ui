@@ -49,12 +49,6 @@ export interface CircuitWitness {
   sessionPub: number[]; // 33 bytes
 }
 
-/** ZK proof result from the proving server. */
-export interface ProofResult {
-  proof: Uint8Array;
-  publicInputs: Uint8Array;
-}
-
 /** Auth request body for bootstrap node /v1/auth (OAuth/ZK path). */
 export interface NodeAuthRequest {
   group_id: string;

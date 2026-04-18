@@ -8,7 +8,7 @@
 
 import type { IdTokenClaims } from "./types";
 
-function base64urlEncode(buf: ArrayBuffer): string {
+function base64urlEncode(buf: ArrayBuffer | Uint8Array): string {
   return btoa(String.fromCharCode(...new Uint8Array(buf)))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
