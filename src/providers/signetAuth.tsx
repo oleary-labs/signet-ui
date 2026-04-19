@@ -21,6 +21,7 @@ import {
   type SessionKeypair,
 } from "@/lib/signet-sdk";
 import { keygen } from "@/lib/signet-sdk/keygen";
+import { generateServerProof } from "@/lib/signet-sdk/server-prover";
 import { env } from "@/config/env";
 
 /**
@@ -85,14 +86,30 @@ export function SignetAuthProvider({ children }: { children: ReactNode }) {
       setSessionPub(keypair.publicKeyHex);
       sessionKeyMaterial.keypair = keypair;
 
-      // Generate ZK proof of the JWT (client-side via WASM, ~2-7s)
-      setStatus("proving");
-      const { proof } = await generateJWTProof(jwt, keypair.publicKeyHex);
-
       // Authenticate with bootstrap nodes (if configured)
       if (env.bootstrapNodes.length > 0 && env.bootstrapGroup !== "0x") {
+        let proof: Uint8Array;
+        let modulusBytes: Uint8Array;
+
+        if (env.useServerProver) {
+          // Server-side proving via bundler's /v1/prove (~2-3s)
+          setStatus("proving");
+          const serverResult = await generateServerProof(
+            "/api/bundler",
+            jwt,
+            keypair.publicKeyHex
+          );
+          proof = serverResult.proof;
+          modulusBytes = serverResult.jwksModulus;
+        } else {
+          // Client-side proving via WASM (~2-7s)
+          setStatus("proving");
+          const clientResult = await generateJWTProof(jwt, keypair.publicKeyHex);
+          proof = clientResult.proof;
+          modulusBytes = await getJWTModulusBytes(jwt);
+        }
+
         setStatus("registering");
-        const modulusBytes = await getJWTModulusBytes(jwt);
         await authenticateWithBootstrap(
           {
             groupId: env.bootstrapGroup,

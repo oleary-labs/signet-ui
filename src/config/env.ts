@@ -17,4 +17,9 @@ export const env = {
   // gas. This is useful on local devnet where no paymaster is deployed.
   paymasterAddress: (process.env.NEXT_PUBLIC_PAYMASTER_ADDRESS ?? "0x") as Address,
   usePaymaster: process.env.NEXT_PUBLIC_USE_PAYMASTER === "true",
+  // Server-side ZK proving. When true, the auth flow delegates proof
+  // generation to the bundler's /v1/prove endpoint (~2-3s) instead of
+  // running it client-side via WASM (~2-7s). Requires the bundler to
+  // have circuitDir configured.
+  useServerProver: process.env.NEXT_PUBLIC_USE_SERVER_PROVER === "true",
 } as const;

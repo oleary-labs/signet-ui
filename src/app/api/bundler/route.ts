@@ -2,16 +2,22 @@ import { NextRequest } from "next/server";
 import { env } from "@/config/env";
 
 /**
- * Server-side proxy for bundler JSON-RPC calls.
+ * Server-side proxy for bundler calls.
  *
  * The browser can't call the bundler directly due to CORS.
  * This route forwards requests server-side.
+ *
+ * By default, forwards to the bundler root (JSON-RPC).
+ * Set the x-bundler-path header to forward to a sub-path
+ * (e.g. /v1/prove for server-side ZK proving).
  */
 export async function POST(request: NextRequest) {
   const body = await request.text();
+  const path = request.headers.get("x-bundler-path") ?? "";
+  const target = `${env.bundlerUrl}${path}`;
 
   try {
-    const res = await fetch(env.bundlerUrl, {
+    const res = await fetch(target, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
