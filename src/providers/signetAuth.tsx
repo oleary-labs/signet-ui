@@ -17,9 +17,11 @@ import {
   generateJWTProof,
   getJWTModulusBytes,
   authenticateWithBootstrap,
+  bytesToHex,
   type IdTokenClaims,
   type SessionKeypair,
 } from "@/lib/signet-sdk";
+import { hexToBytes } from "@/lib/signet-sdk/session";
 import { keygen } from "@/lib/signet-sdk/keygen";
 import { generateServerProof } from "@/lib/signet-sdk/server-prover";
 import { env } from "@/config/env";
@@ -81,68 +83,20 @@ export function SignetAuthProvider({ children }: { children: ReactNode }) {
       setIdToken(jwt);
       setClaims(decoded);
 
-      // Generate ephemeral session keypair
-      const keypair = await generateSessionKeypair();
-      setSessionPub(keypair.publicKeyHex);
-      sessionKeyMaterial.keypair = keypair;
+      // Try to restore a persisted session (avoids re-proving on refresh)
+      const savedPrivKey = sessionStorage.getItem("signet_session_priv");
+      const savedPubKey = sessionStorage.getItem("signet_session_pub");
+      const savedGpk = sessionStorage.getItem("signet_group_public_key");
 
-      // Authenticate with bootstrap nodes (if configured)
-      if (env.bootstrapNodes.length > 0 && env.bootstrapGroup !== "0x") {
-        let proof: Uint8Array;
-        let modulusBytes: Uint8Array;
-
-        if (env.useServerProver) {
-          // Server-side proving via bundler's /v1/prove (~2-3s)
-          setStatus("proving");
-          const serverResult = await generateServerProof(
-            "/api/bundler",
-            jwt,
-            keypair.publicKeyHex
-          );
-          proof = serverResult.proof;
-          modulusBytes = serverResult.jwksModulus;
-        } else {
-          // Client-side proving via WASM (~2-7s)
-          setStatus("proving");
-          const clientResult = await generateJWTProof(jwt, keypair.publicKeyHex);
-          proof = clientResult.proof;
-          modulusBytes = await getJWTModulusBytes(jwt);
-        }
-
-        setStatus("registering");
-        await authenticateWithBootstrap(
-          {
-            groupId: env.bootstrapGroup,
-            nodeUrls: env.bootstrapNodes,
-            proxyEndpoint: "/api/node/proxy",
-          },
-          proof,
-          keypair.publicKeyHex,
-          decoded,
-          modulusBytes
-        );
-
-        // Ensure a key shard exists for this identity
-        setStatus("keygen");
-        const keygenResult = await keygen(
-          {
-            groupId: env.bootstrapGroup,
-            nodeUrls: env.bootstrapNodes,
-            proxyEndpoint: "/api/node/proxy",
-          },
-          keypair,
-          decoded
-        );
-        if (keygenResult.alreadyExisted) {
-          console.log("[signet-auth] key already exists:", keygenResult.keyId);
-        } else {
-          console.log("[signet-auth] key created:", keygenResult.keyId, keygenResult.ethereumAddress);
-        }
-
-        // Derive the counterfactual SignetAccount address from the account factory
-        const gpk = keygenResult.groupPublicKey as Hex;
-        setGroupPublicKey(gpk);
-        sessionStorage.setItem("signet_group_public_key", gpk);
+      if (savedPrivKey && savedPubKey && savedGpk) {
+        // Restore session — skip proving and bootstrap auth
+        const keypair: SessionKeypair = {
+          privateKey: hexToBytes(savedPrivKey),
+          publicKeyHex: savedPubKey,
+        };
+        setSessionPub(keypair.publicKeyHex);
+        sessionKeyMaterial.keypair = keypair;
+        setGroupPublicKey(savedGpk as Hex);
 
         const client = createPublicClient({
           chain: getActiveChain(),
@@ -152,20 +106,94 @@ export function SignetAuthProvider({ children }: { children: ReactNode }) {
           address: signetAccountFactory.address,
           abi: signetAccountFactory.abi,
           functionName: "getAddress",
-          args: [env.entryPointAddress, gpk, 0n],
+          args: [env.entryPointAddress, savedGpk, 0n],
         });
         setAccount(counterfactualAddr as Address);
-        console.log("[signet-auth] counterfactual account:", counterfactualAddr);
+        console.log("[signet-auth] session restored, account:", counterfactualAddr);
       } else {
-        // No bootstrap nodes — fall back to hash-based address
-        const subHash = await crypto.subtle.digest(
-          "SHA-256",
-          new TextEncoder().encode(`${decoded.iss}:${decoded.sub}`)
-        );
-        const hashHex = Array.from(new Uint8Array(subHash))
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("");
-        setAccount(`0x${hashHex.slice(0, 40)}` as Address);
+        // Fresh sign-in — generate keypair, prove, auth, keygen
+        const keypair = await generateSessionKeypair();
+        setSessionPub(keypair.publicKeyHex);
+        sessionKeyMaterial.keypair = keypair;
+
+        if (env.bootstrapNodes.length > 0 && env.bootstrapGroup !== "0x") {
+          let proof: Uint8Array;
+          let modulusBytes: Uint8Array;
+
+          if (env.useServerProver) {
+            setStatus("proving");
+            const serverResult = await generateServerProof(
+              "/api/bundler",
+              jwt,
+              keypair.publicKeyHex
+            );
+            proof = serverResult.proof;
+            modulusBytes = serverResult.jwksModulus;
+          } else {
+            setStatus("proving");
+            const clientResult = await generateJWTProof(jwt, keypair.publicKeyHex);
+            proof = clientResult.proof;
+            modulusBytes = await getJWTModulusBytes(jwt);
+          }
+
+          setStatus("registering");
+          await authenticateWithBootstrap(
+            {
+              groupId: env.bootstrapGroup,
+              nodeUrls: env.bootstrapNodes,
+              proxyEndpoint: "/api/node/proxy",
+            },
+            proof,
+            keypair.publicKeyHex,
+            decoded,
+            modulusBytes
+          );
+
+          setStatus("keygen");
+          const keygenResult = await keygen(
+            {
+              groupId: env.bootstrapGroup,
+              nodeUrls: env.bootstrapNodes,
+              proxyEndpoint: "/api/node/proxy",
+            },
+            keypair,
+            decoded
+          );
+          if (keygenResult.alreadyExisted) {
+            console.log("[signet-auth] key already exists:", keygenResult.keyId);
+          } else {
+            console.log("[signet-auth] key created:", keygenResult.keyId, keygenResult.ethereumAddress);
+          }
+
+          // Persist session for refresh
+          const gpk = keygenResult.groupPublicKey as Hex;
+          setGroupPublicKey(gpk);
+          sessionStorage.setItem("signet_group_public_key", gpk);
+          sessionStorage.setItem("signet_session_priv", bytesToHex(keypair.privateKey));
+          sessionStorage.setItem("signet_session_pub", keypair.publicKeyHex);
+
+          const client = createPublicClient({
+            chain: getActiveChain(),
+            transport: http(env.rpcUrl),
+          });
+          const counterfactualAddr = await client.readContract({
+            address: signetAccountFactory.address,
+            abi: signetAccountFactory.abi,
+            functionName: "getAddress",
+            args: [env.entryPointAddress, gpk, 0n],
+          });
+          setAccount(counterfactualAddr as Address);
+          console.log("[signet-auth] counterfactual account:", counterfactualAddr);
+        } else {
+          const subHash = await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(`${decoded.iss}:${decoded.sub}`)
+          );
+          const hashHex = Array.from(new Uint8Array(subHash))
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+          setAccount(`0x${hashHex.slice(0, 40)}` as Address);
+        }
       }
 
       setStatus("authenticated");
@@ -202,6 +230,8 @@ export function SignetAuthProvider({ children }: { children: ReactNode }) {
     setStatus("idle");
     setError(null);
     sessionStorage.removeItem("signet_id_token");
+    sessionStorage.removeItem("signet_session_priv");
+    sessionStorage.removeItem("signet_session_pub");
     sessionStorage.removeItem("signet_group_public_key");
     sessionKeyMaterial.keypair = null;
   }, []);
