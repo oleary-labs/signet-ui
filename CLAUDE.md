@@ -12,6 +12,18 @@ Signet Console is the web UI for the Signet protocol — a threshold signing net
 
 The target user is an **application developer** who wants to add social-login-based key management to their app. They browse providers, pick nodes, set a threshold, and deploy a signing group.
 
+## Architectural layering — what's Signet, what's the AA bridge, what's this repo
+
+Keep these three layers separate when reasoning about the code. Conflating them produces bad abstractions.
+
+**1. Signet is a chain-agnostic threshold signer.** Its output is one signature per request, produced by FROST (RFC 9591) across a quorum of nodes. Today it emits FROST-Schnorr over secp256k1 (fits EVM); FROST-Ed25519 for Solana is on the roadmap. The signer itself knows nothing about EVM, ERC-4337, UserOperations, or paymasters. Code in `src/lib/` that talks to nodes over HTTP (`nodeApi.ts`) lives at this layer.
+
+**2. The AA bridge is a settlement workaround, not part of Signet.** EVM lacks a native Schnorr precompile, so Schnorr signatures can only reach the chain through account abstraction. We use ERC-4337 because it works today, but it's one option among many — Alchemy, Safe, Biconomy, or a custom validator would all be valid substrates for the same signer. [EIP-8141 "Frame Transaction"](https://eips.ethereum.org/EIPS/eip-8141) (draft, 2026-01-29) proposes a native protocol-level off-ramp from ECDSA that would obviate bundlers, UserOps, and paymasters for accounts that adopt it. Assume this layer will change. Code in `src/lib/userOp.ts`, `src/lib/bundler.ts`, and the paymaster handling in `src/hooks/useSignetWrite.ts` lives at this layer.
+
+**3. This repo uses the reference AA stack (`signet-wallet` + `signet-min-bundler`).** Opinionated, minimal, written in-house so we don't have to depend on third parties while the protocol matures. Works end-to-end, validates the architecture, not intended as the canonical way to build on Signet. When writing docs, skill material, or code comments that explain "how Signet works," be careful not to imply that ERC-4337 / SignetAccount / SignetPaymaster are load-bearing parts of Signet itself — they're just what this Console happens to use.
+
+The `signet-ui` codebase inevitably mixes all three layers because the Console needs signatures to become transactions to work. That's fine for the app; it's not fine for documentation.
+
 ## Related repositories
 
 The smart contracts and node code live in `../signet-protocol/`. Key paths:

@@ -1,42 +1,26 @@
 {
-  "0x9DCb74c3113379dEa5c599D59F84822bB56c9a2B": {
-    "name": "Anchorage Digital",
-    "description": "Institutional-grade digital asset custody and signing infrastructure. SOC 2 Type II certified with 99.99% uptime SLA.",
-    "website": "https://anchorage.com",
+  "0x88156e389F495F45799f0364696B4D7579D539f3": {
+    "name": "Devnet Node 1",
+    "description": "Local development node running on the Signet devnet. First node in the bootstrap group.",
+    "website": "",
     "logo": "",
-    "category": "Custodian",
-    "apiUrl": ""
+    "category": "Devnet",
+    "apiUrl": "http://localhost:8080"
   },
-  "0x706f883E608526629814CB4E72d91b4aaA6B5aB0": {
-    "name": "Figment",
-    "description": "Enterprise staking and web3 infrastructure. Operating validators and signing nodes across 50+ networks since 2018.",
-    "website": "https://figment.io",
+  "0x3d85be9bFB42450d7255fD84A38f631079155675": {
+    "name": "Devnet Node 2",
+    "description": "Local development node running on the Signet devnet. Second node in the bootstrap group.",
+    "website": "",
     "logo": "",
-    "category": "Infrastructure",
-    "apiUrl": ""
+    "category": "Devnet",
+    "apiUrl": "http://localhost:8081"
   },
-  "0x9ff0ceb13605977127B0d98c9BFca5D3a3fFe0c4": {
-    "name": "Blockdaemon",
-    "description": "Blockchain infrastructure for node management and staking. Multi-cloud distributed signing with hardware security modules.",
-    "website": "https://blockdaemon.com",
+  "0xeBBF01cB3Ac2230dC4A867f84C85072842afc87c": {
+    "name": "Devnet Node 3",
+    "description": "Local development node running on the Signet devnet. Third node in the bootstrap group.",
+    "website": "",
     "logo": "",
-    "category": "Infrastructure",
-    "apiUrl": ""
-  },
-  "0x57792445E5c3D1AF6130e60D4086246f36e7Cb2A": {
-    "name": "Chorus One",
-    "description": "Proof-of-stake infrastructure operator specializing in threshold cryptography and MEV-aware signing services.",
-    "website": "https://chorus.one",
-    "logo": "",
-    "category": "Validator",
-    "apiUrl": ""
-  },
-  "0x3e4eEcA7a6a62252fd92b9D55Ba8bb9FE778D7D5": {
-    "name": "InfStones",
-    "description": "Platform-as-a-service for Web3 infrastructure. 20,000+ nodes across 80+ protocols with geo-distributed signing.",
-    "website": "https://infstones.com",
-    "logo": "",
-    "category": "Platform",
-    "apiUrl": ""
+    "category": "Devnet",
+    "apiUrl": "http://localhost:8082"
   }
 }

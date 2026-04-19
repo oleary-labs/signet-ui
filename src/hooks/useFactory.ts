@@ -5,6 +5,16 @@ import { type Address } from "viem";
 import { signetFactory, signetGroup } from "@/config/contracts";
 
 /**
+ * Fetch all group addresses from the factory.
+ */
+export function useAllGroups() {
+  return useReadContract({
+    ...signetFactory,
+    functionName: "getGroups",
+  });
+}
+
+/**
  * Fetch all registered node addresses from the factory.
  */
 export function useRegisteredNodes() {

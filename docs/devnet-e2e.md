@@ -1,8 +1,28 @@
 # Devnet end-to-end walkthrough
 
-Running the Signet Console UI end-to-end locally against a fresh devnet, with sponsored UserOperations via a VerifyingPaymaster.
+Running the Signet Console UI end-to-end locally against a fresh devnet, with sponsored UserOperations via a SignetPaymaster.
 
-The purpose of this document is twofold. First, it's a runbook — the canonical "here is how you stand everything up from zero" reference, so we don't rediscover the ordering each time. Second, it's the raw material for a Signet skill. Everywhere we hit a footgun or make a non-obvious choice, we note it inline; later those notes get compressed into skill prose.
+## What this document is (and isn't)
+
+This is a runbook for **one specific path** through the Signet stack: the EVM + ERC-4337 reference setup, using our own `signet-wallet` smart account and `signet-min-bundler`. It exists because we dog-food the stack while building `signet-ui`, and because writing things down keeps us from rediscovering the ordering each time.
+
+It is **not** a definition of what "using Signet" means. It's one concrete instantiation of three layers that are deliberately separable.
+
+## The three layers, kept separate
+
+**1. Signet — the signer.** Signet is a chain-agnostic threshold signer. It runs FROST (RFC 9591) across a quorum of nodes and produces one signature per request. Today it emits FROST-Schnorr over secp256k1, which fits EVM. FROST-Ed25519 for Solana is on the roadmap. Nothing about Signet itself is EVM-specific; the signer doesn't know or care what gets done with the signature once it leaves the network.
+
+**2. Settlement — how the signature reaches a chain.** This layer is in flux. On EVM today, Schnorr isn't verifiable by native precompiles, so we need an account-abstraction bridge. ERC-4337 is the mechanism we use *right now*, but it's explicitly a workaround for missing native primitives. [EIP-8141 "Frame Transaction"](https://eips.ethereum.org/EIPS/eip-8141) (draft, 2026-01-29) proposes a native off-ramp from ECDSA via a new `FRAME_TX_TYPE` and `APPROVE` opcode, which would let accounts self-define their verification logic without bundlers, UserOps, or paymasters. If and when that lands, large chunks of this walkthrough become obsolete. Solana needs no such bridge — native Ed25519 verification makes Signet a drop-in signer. The settlement layer is whichever mechanism a given chain provides; assume it will change.
+
+**3. Reference stack — `signet-wallet` + `signet-min-bundler`.** An opinionated, minimal reference AA stack we wrote so we don't have to pull in Alchemy, Safe, Biconomy, etc. while experimenting. It validates the end-to-end architecture and keeps the dev loop short. It is **not required** to build on Signet — any AA setup capable of verifying a FROST-Schnorr signature works. Treat this stack as a dated artifact of "what worked in 2026-Q2," not as The Signet Way.
+
+## How to read the rest of this doc
+
+Everything below is layer 2 + layer 3 specific. It's the runbook for the EVM/ERC-4337/reference-stack path. The Phase-by-Phase structure tracks the order you actually run the scripts. "What we captured" at the end of each phase is raw material for skill extraction. Footguns are called out inline.
+
+If you came here looking for "how do I use Signet with [some other chain / some other AA stack / some future EIP-8141 account]," this isn't that doc yet. The signer half (layer 1) transfers; the rest doesn't.
+
+---
 
 ## Repos involved
 
