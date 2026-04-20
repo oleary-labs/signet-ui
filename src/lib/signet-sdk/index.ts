@@ -19,4 +19,6 @@ export * from "./bootstrap";
 export * from "./request";
 export * from "./keygen";
 export * from "./userop";
+export * from "./admin";
+export * from "./server-prover";
 export { generateInputs, splitBigIntToChunks } from "./generate-inputs";
