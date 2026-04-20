@@ -47,7 +47,7 @@ npm run dev
 |---|---|---|
 | `NEXT_PUBLIC_RPC_URL` | JSON-RPC endpoint | `http://127.0.0.1:8545` |
 | `NEXT_PUBLIC_CHAIN_ID` | Target chain ID | `31337` (Anvil) |
-| `NEXT_PUBLIC_FACTORY_ADDRESS` | SignetFactory proxy address | — |
+| `NEXT_PUBLIC_GROUP_FACTORY_ADDRESS` | SignetFactory proxy address | — |
 | `NEXT_PUBLIC_ENTRYPOINT_ADDRESS` | ERC-4337 EntryPoint address | — |
 | `NEXT_PUBLIC_BUNDLER_URL` | signet-min-bundler endpoint | `http://127.0.0.1:4337` |
 | `NEXT_PUBLIC_BOOTSTRAP_GROUP` | Bootstrap signing group address | — |

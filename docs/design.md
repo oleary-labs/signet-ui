@@ -309,7 +309,7 @@ The Console supports switching between networks via environment variables:
 |---|---|
 | `NEXT_PUBLIC_RPC_URL` | JSON-RPC endpoint (Anvil for devnet, Alchemy/Infura for testnets) |
 | `NEXT_PUBLIC_CHAIN_ID` | Target chain ID |
-| `NEXT_PUBLIC_FACTORY_ADDRESS` | Deployed SignetFactory proxy address |
+| `NEXT_PUBLIC_GROUP_FACTORY_ADDRESS` | Deployed SignetFactory proxy address |
 | `NEXT_PUBLIC_BUNDLER_URL` | signet-min-bundler endpoint |
 | `NEXT_PUBLIC_ENTRYPOINT_ADDRESS` | ERC-4337 EntryPoint address |
 | `NEXT_PUBLIC_BOOTSTRAP_GROUP` | Bootstrap group contract address |

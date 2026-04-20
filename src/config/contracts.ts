@@ -6,7 +6,7 @@ import SignetAccountABI from "@/lib/abi/SignetAccount.abi.json";
 import SignetAccountFactoryABI from "@/lib/abi/SignetAccountFactory.abi.json";
 
 export const signetFactory = {
-  address: env.factoryAddress,
+  address: env.groupFactoryAddress,
   abi: SignetFactoryABI,
 } as const;
 
