@@ -51,7 +51,7 @@ export function Header() {
                 {claims?.email ?? claims?.sub}
               </span>
               <button
-                onClick={signOut}
+                onClick={() => { signOut(); window.location.href = "/"; }}
                 className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-primary-700 hover:border-neutral-400 transition-colors"
               >
                 Sign Out

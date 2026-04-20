@@ -2,8 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { type Address } from "viem";
+import { type Address, type Hex } from "viem";
+import { useQuery } from "@tanstack/react-query";
 import { useGroupDetails } from "@/hooks/useFactory";
+import { useSignetAuth } from "@/hooks/useSignetAuth";
+import { sessionKeyMaterial } from "@/providers/signetAuth";
+import { adminRequest, type AdminAuthConfig } from "@/lib/signet-sdk/admin";
+import { env } from "@/config/env";
 import { loadNodeRegistry, getNodeMetadata, type NodeRegistry } from "@/lib/nodeRegistry";
 
 /**
@@ -19,12 +24,45 @@ export default function GroupDetailPage() {
   const params = useParams();
   const address = params.address as Address;
 
+  const { groupPublicKey, claims } = useSignetAuth();
   const { data: details, isLoading } = useGroupDetails(address);
   const [registry, setRegistry] = useState<NodeRegistry>({});
 
   useEffect(() => {
     loadNodeRegistry().then(setRegistry);
   }, []);
+
+  const authKeyPub = groupPublicKey ? `0x01${groupPublicKey.slice(2)}` : null;
+  const adminConfig: AdminAuthConfig = {
+    nodeProxyUrl: "/api/node/proxy",
+    bootstrapGroup: env.bootstrapGroup,
+    bootstrapNodes: env.bootstrapNodes,
+  };
+
+  const { data: keyCount } = useQuery({
+    queryKey: ["admin-keys-count", address],
+    queryFn: async () => {
+      if (!authKeyPub || !sessionKeyMaterial.keypair || !claims) return null;
+      try {
+        const keys = await adminRequest<unknown[]>(
+          adminConfig,
+          env.bootstrapNodes[0],
+          "/admin/keys",
+          address,
+          authKeyPub,
+          sessionKeyMaterial.keypair,
+          claims,
+        );
+        return keys.length;
+      } catch (e) {
+        console.error("[admin-keys]", e);
+        return null;
+      }
+    },
+    enabled: !!authKeyPub && !!sessionKeyMaterial.keypair && !!claims,
+    staleTime: 30_000,
+    retry: 1,
+  });
 
   if (isLoading) {
     return (
@@ -85,8 +123,9 @@ export default function GroupDetailPage() {
           value={threshold !== undefined ? `${threshold} of ${activeNodes.length}` : "-"}
         />
         <StatCard
-          label="Quorum"
-          value={quorum !== undefined ? String(quorum) : "-"}
+          label="Keys"
+          value={keyCount != null ? String(keyCount) : "—"}
+          muted={keyCount == null}
         />
         <StatCard
           label="Manager"
@@ -233,19 +272,32 @@ export default function GroupDetailPage() {
           </div>
           {authKeys.length > 0 ? (
             <div className="space-y-3">
-              {authKeys.map((key) => (
-                <div
-                  key={key}
-                  className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
-                >
-                  <span className="font-mono text-sm text-primary-900">
-                    {key.slice(0, 10)}...{key.slice(-8)}
-                  </span>
-                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">
-                    {(key.length - 2) / 2} bytes
-                  </span>
-                </div>
-              ))}
+              {authKeys.map((key) => {
+                const isOwnKey = groupPublicKey &&
+                  key.toLowerCase() === `0x01${groupPublicKey.slice(2)}`.toLowerCase();
+                const prefixByte = key.slice(2, 4);
+                const keyType = prefixByte === "00" ? "ECDSA" : prefixByte === "01" ? "Schnorr" : "Unknown";
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm text-primary-900">
+                        {key.slice(4, 12)}...{key.slice(-8)}
+                      </span>
+                      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">
+                        {keyType}
+                      </span>
+                      {isOwnKey && (
+                        <span className="rounded-full bg-accent-50 px-2 py-0.5 text-xs font-medium text-accent-700">
+                          Admin key
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6 text-center">
@@ -276,21 +328,25 @@ function StatCard({
   value,
   color,
   mono,
+  muted,
 }: {
   label: string;
   value: string;
   color?: "success" | "error";
   mono?: boolean;
+  muted?: boolean;
 }) {
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
       <p className="text-xs text-neutral-500 mb-1">{label}</p>
       <p
-        className={`text-lg font-semibold ${
-          color === "success"
+        className={`${muted ? "text-sm text-neutral-400" : "text-lg font-semibold"} ${
+          !muted && color === "success"
             ? "text-success-600"
-            : color === "error"
+            : !muted && color === "error"
             ? "text-error-500"
+            : muted
+            ? ""
             : "text-primary-900"
         } ${mono ? "font-mono text-sm" : ""}`}
       >
