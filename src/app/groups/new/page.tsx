@@ -268,16 +268,10 @@ export default function CreateGroupPage() {
                   const meta = getNodeMetadata(registry, addr);
                   return (
                     <p key={addr} className="text-primary-900 text-sm">
-                      {meta?.name ? (
-                        <>
-                          <span className="font-medium">{meta.name}</span>{" "}
-                          <span className="font-mono text-neutral-400">
-                            ({addr.slice(0, 6)}...{addr.slice(-4)})
-                          </span>
-                        </>
-                      ) : (
-                        <span className="font-mono">{addr}</span>
-                      )}
+                      <span className="font-medium">{meta?.name ?? "Unknown Provider"}</span>{" "}
+                      <span className="font-mono text-neutral-400">
+                        ({addr.slice(0, 6)}...{addr.slice(-4)})
+                      </span>
                     </p>
                   );
                 })}

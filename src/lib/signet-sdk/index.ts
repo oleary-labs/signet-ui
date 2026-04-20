@@ -20,5 +20,6 @@ export * from "./request";
 export * from "./keygen";
 export * from "./userop";
 export * from "./admin";
+export * from "./authkey-session";
 export * from "./server-prover";
 export { generateInputs, splitBigIntToChunks } from "./generate-inputs";

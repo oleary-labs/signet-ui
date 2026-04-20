@@ -59,8 +59,7 @@ export function NodeCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-semibold text-primary-900 truncate">
-            {metadata?.name ??
-              `${address.slice(0, 6)}...${address.slice(-4)}`}
+            {metadata?.name ?? "Unknown Provider"}
           </h3>
           {metadata?.category && (
             <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500">

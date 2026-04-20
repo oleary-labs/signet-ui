@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { type Address, type Hex } from "viem";
-import { useQuery } from "@tanstack/react-query";
+import { type Address, type Hex, type Abi, keccak256, toHex, encodePacked } from "viem";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGroupDetails } from "@/hooks/useFactory";
 import { useSignetAuth } from "@/hooks/useSignetAuth";
+import { useSignetWrite } from "@/hooks/useSignetWrite";
 import { sessionKeyMaterial } from "@/providers/signetAuth";
 import { adminRequest, type AdminAuthConfig } from "@/lib/signet-sdk/admin";
+import { signetGroup } from "@/config/contracts";
 import { env } from "@/config/env";
 import { loadNodeRegistry, getNodeMetadata, type NodeRegistry } from "@/lib/nodeRegistry";
 
@@ -24,7 +26,7 @@ export default function GroupDetailPage() {
   const params = useParams();
   const address = params.address as Address;
 
-  const { groupPublicKey, claims } = useSignetAuth();
+  const { account, groupPublicKey, claims } = useSignetAuth();
   const { data: details, isLoading } = useGroupDetails(address);
   const [registry, setRegistry] = useState<NodeRegistry>({});
 
@@ -129,18 +131,32 @@ export default function GroupDetailPage() {
         />
         <StatCard
           label="Manager"
-          value={manager ? `${manager.slice(0, 6)}...${manager.slice(-4)}` : "-"}
+          value={
+            manager
+              ? manager.toLowerCase() === account?.toLowerCase()
+                ? `You (${manager.slice(0, 6)}...${manager.slice(-4)})`
+                : `${manager.slice(0, 6)}...${manager.slice(-4)}`
+              : "-"
+          }
           mono
         />
       </div>
 
       {/* Sections */}
       <div className="space-y-12">
-        {/* Membership */}
+        {/* Providers */}
         <section>
-          <h2 className="text-lg font-semibold text-primary-900 mb-4">
-            Membership
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-primary-900">
+              Providers
+            </h2>
+            <button
+              disabled
+              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 opacity-50 cursor-not-allowed"
+            >
+              Add Node
+            </button>
+          </div>
           <div className="space-y-3">
             {activeNodes.map((node) => {
               const meta = getNodeMetadata(registry, node);
@@ -152,19 +168,24 @@ export default function GroupDetailPage() {
                   <div className="flex items-center gap-3">
                     <span className="h-2 w-2 rounded-full bg-success-500" />
                     <span className="text-sm text-primary-900">
-                      {meta?.name ? (
-                        <>
-                          <span className="font-medium">{meta.name}</span>{" "}
-                          <span className="font-mono text-neutral-400">
-                            ({node.slice(0, 6)}...{node.slice(-4)})
-                          </span>
-                        </>
-                      ) : (
-                        <span className="font-mono">{node}</span>
-                      )}
+                      <span className="font-medium">{meta?.name ?? "Unknown Provider"}</span>{" "}
+                      <span className="font-mono text-neutral-400">
+                        ({node.slice(0, 6)}...{node.slice(-4)})
+                      </span>
                     </span>
                   </div>
-                  <span className="text-xs text-success-700">Active</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-success-700">Active</span>
+                    <button
+                      disabled
+                      className="p-1 text-neutral-300 hover:text-error-500 transition-colors opacity-50 cursor-not-allowed"
+                      title="Remove node"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -178,16 +199,10 @@ export default function GroupDetailPage() {
                   <div className="flex items-center gap-3">
                     <span className="h-2 w-2 rounded-full bg-accent-400" />
                     <span className="text-sm text-primary-900">
-                      {meta?.name ? (
-                        <>
-                          <span className="font-medium">{meta.name}</span>{" "}
-                          <span className="font-mono text-neutral-400">
-                            ({node.slice(0, 6)}...{node.slice(-4)})
-                          </span>
-                        </>
-                      ) : (
-                        <span className="font-mono">{node}</span>
-                      )}
+                      <span className="font-medium">{meta?.name ?? "Unknown Provider"}</span>{" "}
+                      <span className="font-mono text-neutral-400">
+                        ({node.slice(0, 6)}...{node.slice(-4)})
+                      </span>
                     </span>
                   </div>
                   <span className="text-xs text-accent-600">Pending</span>
@@ -201,112 +216,17 @@ export default function GroupDetailPage() {
         </section>
 
         {/* OAuth Issuers */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-primary-900">
-                OAuth Issuers
-              </h2>
-              <p className="text-xs text-neutral-400 mt-0.5">
-                Configure which OAuth providers can authenticate users.{" "}
-                <a href="#" className="text-accent-500 hover:text-accent-600">
-                  Learn more &rarr;
-                </a>
-              </p>
-            </div>
-            <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors">
-              Add Issuer
-            </button>
-          </div>
-          {issuers.length > 0 ? (
-            <div className="space-y-3">
-              {issuers.map((iss, i) => (
-                <div
-                  key={i}
-                  className="rounded-lg border border-neutral-200 bg-white px-4 py-3"
-                >
-                  <p className="text-sm font-medium text-primary-900">
-                    {iss.issuer}
-                  </p>
-                  {iss.clientIds.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {iss.clientIds.map((cid) => (
-                        <span
-                          key={cid}
-                          className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs text-neutral-600"
-                        >
-                          {cid}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6 text-center">
-              <p className="text-sm text-neutral-500">
-                No issuers configured. Add an OAuth issuer to enable social login for your app.
-              </p>
-            </div>
-          )}
-        </section>
+        <AddIssuerSection
+          groupAddress={address}
+          issuers={issuers}
+        />
 
         {/* Auth Keys */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-primary-900">
-                Authorization Keys
-              </h2>
-              <p className="text-xs text-neutral-400 mt-0.5">
-                Configure API keys that can manage keygen and signing directly.{" "}
-                <a href="#" className="text-accent-500 hover:text-accent-600">
-                  Learn more &rarr;
-                </a>
-              </p>
-            </div>
-            <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors">
-              Add Key
-            </button>
-          </div>
-          {authKeys.length > 0 ? (
-            <div className="space-y-3">
-              {authKeys.map((key) => {
-                const isOwnKey = groupPublicKey &&
-                  key.toLowerCase() === `0x01${groupPublicKey.slice(2)}`.toLowerCase();
-                const prefixByte = key.slice(2, 4);
-                const keyType = prefixByte === "00" ? "ECDSA" : prefixByte === "01" ? "Schnorr" : "Unknown";
-                return (
-                  <div
-                    key={key}
-                    className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm text-primary-900">
-                        {key.slice(4, 12)}...{key.slice(-8)}
-                      </span>
-                      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">
-                        {keyType}
-                      </span>
-                      {isOwnKey && (
-                        <span className="rounded-full bg-accent-50 px-2 py-0.5 text-xs font-medium text-accent-700">
-                          Admin key
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6 text-center">
-              <p className="text-sm text-neutral-500">
-                No authorization keys configured.
-              </p>
-            </div>
-          )}
-        </section>
+        <AuthKeysSection
+          groupAddress={address}
+          authKeys={authKeys}
+          adminKeyPub={groupPublicKey ? `0x01${groupPublicKey.slice(2)}` : null}
+        />
 
         {/* Time-Lock Queue */}
         <section>
@@ -320,6 +240,419 @@ export default function GroupDetailPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+function AddIssuerSection({
+  groupAddress,
+  issuers,
+}: {
+  groupAddress: Address;
+  issuers: { issuer: string; clientIds: readonly string[] }[];
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [issuerUrl, setIssuerUrl] = useState("");
+  const [clientIds, setClientIds] = useState("");
+  const [removingIssuer, setRemovingIssuer] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const { write, status, error, reset } = useSignetWrite();
+  const queryClient = useQueryClient();
+
+  const isSubmitting = status !== "idle" && status !== "success" && status !== "error";
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const ids = clientIds.split(",").map((s) => s.trim()).filter(Boolean);
+    try {
+      await write({
+        address: groupAddress,
+        abi: signetGroup(groupAddress).abi as Abi,
+        functionName: "addIssuer",
+        args: [issuerUrl, ids],
+      });
+      setIssuerUrl("");
+      setClientIds("");
+      setShowForm(false);
+      reset();
+      queryClient.invalidateQueries();
+    } catch {
+      // error captured in hook state
+    }
+  }
+
+  async function handleRemove(issuer: string) {
+    setRemovingIssuer(issuer);
+    reset();
+    const issuerHash = keccak256(encodePacked(["string"], [issuer]));
+    try {
+      await write({
+        address: groupAddress,
+        abi: signetGroup(groupAddress).abi as Abi,
+        functionName: "removeIssuer",
+        args: [issuerHash],
+      });
+      setRemovingIssuer(null);
+      reset();
+      queryClient.invalidateQueries();
+    } catch {
+      setRemovingIssuer(null);
+    }
+  }
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold text-primary-900">
+            OAuth Issuers
+          </h2>
+          <p className="text-xs text-neutral-400 mt-0.5">
+            Configure which OAuth providers can authenticate users.{" "}
+            <a href="#" className="text-accent-500 hover:text-accent-600">
+              Learn more &rarr;
+            </a>
+          </p>
+        </div>
+        <button
+          onClick={() => { setShowForm(!showForm); reset(); }}
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+        >
+          {showForm ? "Cancel" : "Add Issuer"}
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleSubmit} className="mb-4 rounded-lg border border-accent-200 bg-accent-50/50 p-4 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-primary-800 mb-1">
+              Issuer URL
+            </label>
+            <input
+              type="text"
+              value={issuerUrl}
+              onChange={(e) => setIssuerUrl(e.target.value)}
+              placeholder="https://accounts.google.com"
+              className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-primary-900 placeholder:text-neutral-400 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-primary-800 mb-1">
+              Client IDs
+            </label>
+            <input
+              type="text"
+              value={clientIds}
+              onChange={(e) => setClientIds(e.target.value)}
+              placeholder="client-id-1, client-id-2"
+              className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-primary-900 placeholder:text-neutral-400 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
+            />
+            <p className="mt-1 text-xs text-neutral-400">Comma-separated. Leave empty for any client ID.</p>
+          </div>
+          {status === "error" && (
+            <p className="text-xs text-error-600">{error?.message}</p>
+          )}
+          <button
+            type="submit"
+            disabled={isSubmitting || !issuerUrl}
+            className="rounded-lg bg-accent-500 px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
+          >
+            {isSubmitting ? "Submitting..." : "Add Issuer"}
+          </button>
+        </form>
+      )}
+
+      {issuers.length > 0 ? (
+        <div className="space-y-3">
+          {issuers.map((iss, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
+            >
+              <div>
+                <p className="text-sm font-medium text-primary-900">
+                  {iss.issuer}
+                </p>
+                {iss.clientIds.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {iss.clientIds.map((cid) => (
+                      <span
+                        key={cid}
+                        className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs text-neutral-600"
+                      >
+                        {cid}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => setConfirmRemove(iss.issuer)}
+                disabled={isSubmitting}
+                className="p-1 text-neutral-300 hover:text-error-500 transition-colors disabled:opacity-50"
+                title="Remove issuer"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        !showForm && (
+          <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6 text-center">
+            <p className="text-sm text-neutral-500">
+              No issuers configured. Add an OAuth issuer to enable social login for your app.
+            </p>
+          </div>
+        )
+      )}
+
+      {/* Confirm remove modal */}
+      {confirmRemove && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h3 className="text-sm font-semibold text-primary-900">Remove issuer?</h3>
+            <p className="mt-2 text-sm text-neutral-500">
+              This will remove <span className="font-medium text-primary-800">{confirmRemove}</span> and
+              all its client IDs. Users authenticating via this issuer will no longer be able to access this group.
+            </p>
+            {status === "error" && removingIssuer && (
+              <p className="mt-2 text-xs text-error-600">{error?.message}</p>
+            )}
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => { setConfirmRemove(null); reset(); }}
+                disabled={isSubmitting}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleRemove(confirmRemove).then(() => setConfirmRemove(null));
+                }}
+                disabled={isSubmitting}
+                className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors disabled:opacity-50"
+              >
+                {removingIssuer === confirmRemove ? "Removing..." : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AuthKeysSection({
+  groupAddress,
+  authKeys,
+  adminKeyPub,
+}: {
+  groupAddress: Address;
+  authKeys: readonly `0x${string}`[];
+  adminKeyPub: string | null;
+}) {
+  const [generatedKey, setGeneratedKey] = useState<{ privateKey: string; publicKey: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [removingKey, setRemovingKey] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const { write, status, error, reset } = useSignetWrite();
+  const queryClient = useQueryClient();
+
+  const isSubmitting = status !== "idle" && status !== "success" && status !== "error";
+
+  async function handleGenerate() {
+    reset();
+    const { utils, getPublicKey } = await import("@noble/secp256k1");
+    const privateKey = utils.randomSecretKey();
+    const publicKey = getPublicKey(privateKey, true); // 33-byte compressed
+
+    const privHex = Array.from(privateKey).map((b) => b.toString(16).padStart(2, "0")).join("");
+    const pubHex = Array.from(publicKey).map((b) => b.toString(16).padStart(2, "0")).join("");
+
+    // ECDSA prefix 0x00 + compressed public key
+    const prefixedPub = `0x00${pubHex}` as Hex;
+
+    try {
+      await write({
+        address: groupAddress,
+        abi: signetGroup(groupAddress).abi as Abi,
+        functionName: "addAuthKey",
+        args: [prefixedPub],
+      });
+      setGeneratedKey({ privateKey: privHex, publicKey: pubHex });
+      reset();
+      queryClient.invalidateQueries();
+    } catch {
+      // error captured in hook state
+    }
+  }
+
+  async function handleRemove(key: string) {
+    setRemovingKey(key);
+    reset();
+    const keyHash = keccak256(key as Hex);
+    try {
+      await write({
+        address: groupAddress,
+        abi: signetGroup(groupAddress).abi as Abi,
+        functionName: "removeAuthKey",
+        args: [keyHash],
+      });
+      setRemovingKey(null);
+      setConfirmRemove(null);
+      reset();
+      queryClient.invalidateQueries();
+    } catch {
+      setRemovingKey(null);
+    }
+  }
+
+  function copyPrivateKey() {
+    if (!generatedKey) return;
+    navigator.clipboard.writeText(generatedKey.privateKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold text-primary-900">
+            Authorization Keys
+          </h2>
+          <p className="text-xs text-neutral-400 mt-0.5">
+            Configure API keys that can manage keygen and signing directly.{" "}
+            <a href="#" className="text-accent-500 hover:text-accent-600">
+              Learn more &rarr;
+            </a>
+          </p>
+        </div>
+        <button
+          onClick={handleGenerate}
+          disabled={isSubmitting}
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors disabled:opacity-50"
+        >
+          {isSubmitting && !removingKey ? "Generating..." : "Generate Key"}
+        </button>
+      </div>
+
+      {status === "error" && !removingKey && (
+        <p className="mb-3 text-xs text-error-600">{error?.message}</p>
+      )}
+
+      {/* Show generated private key — one-time reveal */}
+      {generatedKey && (
+        <div className="mb-4 rounded-lg border border-success-200 bg-success-50 p-4">
+          <p className="text-xs font-semibold text-success-800 mb-1">
+            Key generated — save this private key now. It will not be shown again.
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 break-all rounded bg-white px-3 py-2 font-mono text-xs text-primary-900 border border-success-200">
+              {generatedKey.privateKey}
+            </code>
+            <button
+              onClick={copyPrivateKey}
+              className="shrink-0 rounded-lg border border-success-300 px-3 py-2 text-xs font-semibold text-success-700 hover:bg-success-100 transition-colors"
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <button
+            onClick={() => setGeneratedKey(null)}
+            className="mt-2 text-xs text-success-600 hover:text-success-800 transition-colors"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {authKeys.length > 0 ? (
+        <div className="space-y-3">
+          {authKeys.map((key) => {
+            const isAdmin = adminKeyPub &&
+              key.toLowerCase() === adminKeyPub.toLowerCase();
+            const prefixByte = key.slice(2, 4);
+            const keyType = prefixByte === "00" ? "ECDSA" : prefixByte === "01" ? "Schnorr" : "Unknown";
+            return (
+              <div
+                key={key}
+                className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm text-primary-900">
+                    {key.slice(4, 12)}...{key.slice(-8)}
+                  </span>
+                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">
+                    {keyType}
+                  </span>
+                  {isAdmin && (
+                    <span className="rounded-full bg-accent-50 px-2 py-0.5 text-xs font-medium text-accent-700">
+                      Admin key
+                    </span>
+                  )}
+                </div>
+                {!isAdmin && (
+                  <button
+                    onClick={() => setConfirmRemove(key)}
+                    disabled={isSubmitting}
+                    className="p-1 text-neutral-300 hover:text-error-500 transition-colors disabled:opacity-50"
+                    title="Remove key"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6 text-center">
+          <p className="text-sm text-neutral-500">
+            No authorization keys configured.
+          </p>
+        </div>
+      )}
+
+      {/* Confirm remove modal */}
+      {confirmRemove && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h3 className="text-sm font-semibold text-primary-900">Remove authorization key?</h3>
+            <p className="mt-2 text-sm text-neutral-500">
+              This will revoke access for any application using this key.
+              The key <span className="font-mono text-xs">{confirmRemove.slice(4, 12)}...{confirmRemove.slice(-8)}</span> will
+              no longer be able to authenticate with this group.
+            </p>
+            {status === "error" && removingKey && (
+              <p className="mt-2 text-xs text-error-600">{error?.message}</p>
+            )}
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => { setConfirmRemove(null); reset(); }}
+                disabled={isSubmitting}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleRemove(confirmRemove)}
+                disabled={isSubmitting}
+                className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors disabled:opacity-50"
+              >
+                {removingKey === confirmRemove ? "Removing..." : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
