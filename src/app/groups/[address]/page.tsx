@@ -1,8 +1,10 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { type Address } from "viem";
 import { useGroupDetails } from "@/hooks/useFactory";
+import { loadNodeRegistry, getNodeMetadata, type NodeRegistry } from "@/lib/nodeRegistry";
 
 /**
  * Group detail / management page.
@@ -18,6 +20,11 @@ export default function GroupDetailPage() {
   const address = params.address as Address;
 
   const { data: details, isLoading } = useGroupDetails(address);
+  const [registry, setRegistry] = useState<NodeRegistry>({});
+
+  useEffect(() => {
+    loadNodeRegistry().then(setRegistry);
+  }, []);
 
   if (isLoading) {
     return (
@@ -42,6 +49,9 @@ export default function GroupDetailPage() {
     activeNodesResult,
     pendingNodesResult,
     isOperationalResult,
+    _removalDelayResult,
+    issuersResult,
+    authKeysResult,
   ] = details ?? [];
 
   const threshold = thresholdResult?.result as bigint | undefined;
@@ -50,6 +60,10 @@ export default function GroupDetailPage() {
   const activeNodes = (activeNodesResult?.result as Address[] | undefined) ?? [];
   const pendingNodes = (pendingNodesResult?.result as Address[] | undefined) ?? [];
   const isOperational = isOperationalResult?.result as boolean | undefined;
+
+  type OAuthIssuer = { issuer: string; clientIds: readonly string[] };
+  const issuers = (issuersResult?.result as OAuthIssuer[] | undefined) ?? [];
+  const authKeys = (authKeysResult?.result as readonly `0x${string}`[] | undefined) ?? [];
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-12">
@@ -89,30 +103,58 @@ export default function GroupDetailPage() {
             Membership
           </h2>
           <div className="space-y-3">
-            {activeNodes.map((node) => (
-              <div
-                key={node}
-                className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="h-2 w-2 rounded-full bg-success-500" />
-                  <span className="font-mono text-sm text-primary-900">{node}</span>
+            {activeNodes.map((node) => {
+              const meta = getNodeMetadata(registry, node);
+              return (
+                <div
+                  key={node}
+                  className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="h-2 w-2 rounded-full bg-success-500" />
+                    <span className="text-sm text-primary-900">
+                      {meta?.name ? (
+                        <>
+                          <span className="font-medium">{meta.name}</span>{" "}
+                          <span className="font-mono text-neutral-400">
+                            ({node.slice(0, 6)}...{node.slice(-4)})
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-mono">{node}</span>
+                      )}
+                    </span>
+                  </div>
+                  <span className="text-xs text-success-700">Active</span>
                 </div>
-                <span className="text-xs text-success-700">Active</span>
-              </div>
-            ))}
-            {pendingNodes.map((node) => (
-              <div
-                key={node}
-                className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="h-2 w-2 rounded-full bg-accent-400" />
-                  <span className="font-mono text-sm text-primary-900">{node}</span>
+              );
+            })}
+            {pendingNodes.map((node) => {
+              const meta = getNodeMetadata(registry, node);
+              return (
+                <div
+                  key={node}
+                  className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="h-2 w-2 rounded-full bg-accent-400" />
+                    <span className="text-sm text-primary-900">
+                      {meta?.name ? (
+                        <>
+                          <span className="font-medium">{meta.name}</span>{" "}
+                          <span className="font-mono text-neutral-400">
+                            ({node.slice(0, 6)}...{node.slice(-4)})
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-mono">{node}</span>
+                      )}
+                    </span>
+                  </div>
+                  <span className="text-xs text-accent-600">Pending</span>
                 </div>
-                <span className="text-xs text-accent-600">Pending</span>
-              </div>
-            ))}
+              );
+            })}
             {activeNodes.length === 0 && pendingNodes.length === 0 && (
               <p className="text-sm text-neutral-500">No nodes in this group.</p>
             )}
@@ -121,24 +163,97 @@ export default function GroupDetailPage() {
 
         {/* OAuth Issuers */}
         <section>
-          <h2 className="text-lg font-semibold text-primary-900 mb-4">
-            OAuth Issuers
-          </h2>
-          <p className="text-sm text-neutral-500">
-            {/* TODO: render issuers from contract read */}
-            Issuer management coming soon.
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-primary-900">
+                OAuth Issuers
+              </h2>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                Configure which OAuth providers can authenticate users.{" "}
+                <a href="#" className="text-accent-500 hover:text-accent-600">
+                  Learn more &rarr;
+                </a>
+              </p>
+            </div>
+            <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors">
+              Add Issuer
+            </button>
+          </div>
+          {issuers.length > 0 ? (
+            <div className="space-y-3">
+              {issuers.map((iss, i) => (
+                <div
+                  key={i}
+                  className="rounded-lg border border-neutral-200 bg-white px-4 py-3"
+                >
+                  <p className="text-sm font-medium text-primary-900">
+                    {iss.issuer}
+                  </p>
+                  {iss.clientIds.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {iss.clientIds.map((cid) => (
+                        <span
+                          key={cid}
+                          className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs text-neutral-600"
+                        >
+                          {cid}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6 text-center">
+              <p className="text-sm text-neutral-500">
+                No issuers configured. Add an OAuth issuer to enable social login for your app.
+              </p>
+            </div>
+          )}
         </section>
 
         {/* Auth Keys */}
         <section>
-          <h2 className="text-lg font-semibold text-primary-900 mb-4">
-            Authorization Keys
-          </h2>
-          <p className="text-sm text-neutral-500">
-            {/* TODO: render auth keys from contract read */}
-            Auth key management coming soon.
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-primary-900">
+                Authorization Keys
+              </h2>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                Configure API keys that can manage keygen and signing directly.{" "}
+                <a href="#" className="text-accent-500 hover:text-accent-600">
+                  Learn more &rarr;
+                </a>
+              </p>
+            </div>
+            <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors">
+              Add Key
+            </button>
+          </div>
+          {authKeys.length > 0 ? (
+            <div className="space-y-3">
+              {authKeys.map((key) => (
+                <div
+                  key={key}
+                  className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
+                >
+                  <span className="font-mono text-sm text-primary-900">
+                    {key.slice(0, 10)}...{key.slice(-8)}
+                  </span>
+                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">
+                    {(key.length - 2) / 2} bytes
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6 text-center">
+              <p className="text-sm text-neutral-500">
+                No authorization keys configured.
+              </p>
+            </div>
+          )}
         </section>
 
         {/* Time-Lock Queue */}

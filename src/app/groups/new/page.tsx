@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { type Address } from "viem";
+import { type Address, type Hex, concat, toHex } from "viem";
 import { useSignetAuth } from "@/hooks/useSignetAuth";
 import { useSignetWrite } from "@/hooks/useSignetWrite";
 import { NodeGrid } from "@/components/marketplace/NodeGrid";
@@ -20,7 +20,7 @@ type WizardStep = "threshold" | "nodes" | "review" | "deploy";
  * 4. Deploy and provision application key
  */
 export default function CreateGroupPage() {
-  const { isAuthenticated, signIn, status } = useSignetAuth();
+  const { isAuthenticated, signIn, status, groupPublicKey } = useSignetAuth();
   const { write, status: deployStatus, error: deployError, txHash, reset: resetDeploy } = useSignetWrite();
   const deployStarted = useRef(false);
 
@@ -319,6 +319,7 @@ export default function CreateGroupPage() {
         <DeployStep
           selectedNodes={selectedNodes}
           threshold={threshold}
+          groupPublicKey={groupPublicKey}
           deployStatus={deployStatus}
           deployError={deployError}
           txHash={txHash}
@@ -352,6 +353,7 @@ const STATUS_LABELS: Record<string, string> = {
 function DeployStep({
   selectedNodes,
   threshold,
+  groupPublicKey,
   deployStatus,
   deployError,
   txHash,
@@ -362,6 +364,7 @@ function DeployStep({
 }: {
   selectedNodes: Set<string>;
   threshold: number;
+  groupPublicKey: Hex | null;
   deployStatus: string;
   deployError: Error | null;
   txHash: `0x${string}` | null;
@@ -373,6 +376,12 @@ function DeployStep({
   const nodeAddrs = Array.from(selectedNodes) as Address[];
   const removalDelay = 86400n; // 1 day
 
+  // Add user's group key as an initial auth key (Schnorr prefix 0x01)
+  const initialAuthKeys: Hex[] = [];
+  if (groupPublicKey) {
+    initialAuthKeys.push(concat([toHex(1, { size: 1 }), groupPublicKey]));
+  }
+
   useEffect(() => {
     if (deployStarted.current) return;
     deployStarted.current = true;
@@ -381,7 +390,7 @@ function DeployStep({
       address: signetFactory.address,
       abi: signetFactory.abi as Parameters<typeof write>[0]["abi"],
       functionName: "createGroup",
-      args: [nodeAddrs, BigInt(threshold), removalDelay, [], []],
+      args: [nodeAddrs, BigInt(threshold), removalDelay, [], initialAuthKeys],
     }).catch(() => {
       // error is captured in deployError state
     });
