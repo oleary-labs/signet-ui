@@ -17,9 +17,15 @@ export async function POST(request: NextRequest) {
   const target = `${env.bundlerUrl}${path}`;
 
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const apiKey = process.env.PROVER_API_KEY;
+    if (apiKey && path === "/v1/prove") {
+      headers["X-API-Key"] = apiKey;
+    }
+
     const res = await fetch(target, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body,
     });
 
