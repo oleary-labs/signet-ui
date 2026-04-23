@@ -45,6 +45,14 @@ export interface PaymasterSponsorship {
   paymasterPostOpGasLimit: Hex;
 }
 
+/**
+ * ERC-7677 context object passed as the 4th parameter to
+ * pm_getPaymasterStubData / pm_getPaymasterData.
+ */
+export interface PaymasterContext {
+  invite_code?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Bundler RPC
 // ---------------------------------------------------------------------------
@@ -105,9 +113,10 @@ export async function getPaymasterStubData(
   bundlerUrl: string,
   entryPointAddress: Address,
   chainId: number,
-  userOp: PackedUserOperation
+  userOp: PackedUserOperation,
+  context?: PaymasterContext,
 ): Promise<PaymasterSponsorship> {
-  return paymasterCall(bundlerUrl, entryPointAddress, chainId, "pm_getPaymasterStubData", userOp);
+  return paymasterCall(bundlerUrl, entryPointAddress, chainId, "pm_getPaymasterStubData", userOp, context);
 }
 
 /**
@@ -124,9 +133,10 @@ export async function getPaymasterData(
   bundlerUrl: string,
   entryPointAddress: Address,
   chainId: number,
-  userOp: PackedUserOperation
+  userOp: PackedUserOperation,
+  context?: PaymasterContext,
 ): Promise<PaymasterSponsorship> {
-  return paymasterCall(bundlerUrl, entryPointAddress, chainId, "pm_getPaymasterData", userOp);
+  return paymasterCall(bundlerUrl, entryPointAddress, chainId, "pm_getPaymasterData", userOp, context);
 }
 
 /**
@@ -168,13 +178,14 @@ async function paymasterCall(
   entryPointAddress: Address,
   chainId: number,
   method: "pm_getPaymasterStubData" | "pm_getPaymasterData",
-  userOp: PackedUserOperation
+  userOp: PackedUserOperation,
+  context?: PaymasterContext,
 ): Promise<PaymasterSponsorship> {
   const json = await bundlerRpc(bundlerUrl, method, [
     serializeUserOp(userOp),
     entryPointAddress,
     `0x${chainId.toString(16)}`,
-    {},
+    context ?? {},
   ]);
 
   return {

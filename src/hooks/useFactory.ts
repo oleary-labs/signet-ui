@@ -1,7 +1,7 @@
 "use client";
 
 import { useReadContract, useReadContracts } from "wagmi";
-import { type Address } from "viem";
+import { type Address, type Abi } from "viem";
 import { signetFactory, signetGroup } from "@/config/contracts";
 
 /**
@@ -64,8 +64,29 @@ export function useGroupDetails(address: Address | undefined) {
           { ...signetGroup(address), functionName: "removalDelay" },
           { ...signetGroup(address), functionName: "getIssuers" },
           { ...signetGroup(address), functionName: "getAuthKeys" },
+          { ...signetGroup(address), functionName: "getPendingRemovals" },
         ]
       : [],
     query: { enabled: !!address },
+  });
+}
+
+/**
+ * Fetch removal request details for specific nodes in a group.
+ */
+export function useRemovalRequests(
+  groupAddress: Address | undefined,
+  nodes: Address[],
+) {
+  return useReadContracts({
+    contracts: groupAddress
+      ? nodes.map((node) => ({
+          address: groupAddress,
+          abi: signetGroup(groupAddress).abi as Abi,
+          functionName: "removalRequests",
+          args: [node],
+        }))
+      : [],
+    query: { enabled: !!groupAddress && nodes.length > 0 },
   });
 }

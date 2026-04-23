@@ -24,39 +24,36 @@ export default function DashboardPage() {
 
   const groups = (allGroups as Address[] | undefined) ?? [];
 
-  // Batch-read manager() for each group
-  const managerContracts = groups.map((addr) => ({
-    address: addr,
-    abi: signetGroup(addr).abi as Abi,
-    functionName: "manager" as const,
-  }));
-  const { data: managerResults, isLoading: managersLoading } = useReadContracts({
-    contracts: managerContracts,
-    query: { enabled: groups.length > 0 },
-  });
-
-  // Filter to groups managed by this account
-  const myGroupAddresses = useMemo(() => {
-    if (!managerResults || !account) return [];
-    return groups.filter((_, i) => {
-      const manager = managerResults[i]?.result as Address | undefined;
-      return manager?.toLowerCase() === account.toLowerCase();
-    });
-  }, [groups, managerResults, account]);
-
-  // Batch-read threshold, isOperational, activeNodes for my groups
-  const detailContracts = myGroupAddresses.flatMap((addr) => {
+  // Single multicall: read manager + threshold + isOperational + activeNodes for all groups
+  const allContracts = groups.flatMap((addr) => {
     const abi = signetGroup(addr).abi as Abi;
     return [
+      { address: addr, abi, functionName: "manager" as const },
       { address: addr, abi, functionName: "threshold" as const },
       { address: addr, abi, functionName: "isOperational" as const },
       { address: addr, abi, functionName: "getActiveNodes" as const },
     ];
   });
-  const { data: detailResults, isLoading: detailsLoading } = useReadContracts({
-    contracts: detailContracts,
-    query: { enabled: myGroupAddresses.length > 0 },
+  const { data: allResults, isLoading: detailsLoading } = useReadContracts({
+    contracts: allContracts,
+    query: { enabled: groups.length > 0 },
   });
+
+  // Filter to groups managed by this account, with details already loaded
+  const FIELDS_PER_GROUP = 4;
+  const myGroups = useMemo(() => {
+    if (!allResults || !account) return [];
+    return groups
+      .map((addr, i) => {
+        const base = i * FIELDS_PER_GROUP;
+        const manager = allResults[base]?.result as Address | undefined;
+        const threshold = allResults[base + 1]?.result as bigint | undefined;
+        const isOperational = allResults[base + 2]?.result as boolean | undefined;
+        const activeNodes = (allResults[base + 3]?.result as Address[] | undefined) ?? [];
+        return { addr, manager, threshold, isOperational, activeNodes };
+      })
+      .filter((g) => g.manager?.toLowerCase() === account.toLowerCase());
+  }, [groups, allResults, account]);
 
   if (!isAuthenticated) {
     return (
@@ -69,7 +66,7 @@ export default function DashboardPage() {
     );
   }
 
-  const isLoading = groupsLoading || managersLoading || detailsLoading;
+  const isLoading = groupsLoading || detailsLoading;
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-12">
@@ -97,7 +94,7 @@ export default function DashboardPage() {
             <GroupCardSkeleton key={i} />
           ))}
         </div>
-      ) : myGroupAddresses.length === 0 ? (
+      ) : myGroups.length === 0 ? (
         <div className="rounded-xl border border-neutral-200 bg-white p-12 text-center">
           <p className="text-sm text-neutral-500">
             No groups found. Create your first trust group to get started.
@@ -111,21 +108,15 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {myGroupAddresses.map((addr, i) => {
-            const threshold = detailResults?.[i * 3]?.result as bigint | undefined;
-            const isOperational = detailResults?.[i * 3 + 1]?.result as boolean | undefined;
-            const activeNodes = (detailResults?.[i * 3 + 2]?.result as Address[] | undefined) ?? [];
-
-            return (
-              <GroupCard
-                key={addr}
-                address={addr}
-                threshold={threshold}
-                activeNodeCount={activeNodes.length}
-                isOperational={isOperational}
-              />
-            );
-          })}
+          {myGroups.map((g) => (
+            <GroupCard
+              key={g.addr}
+              address={g.addr}
+              threshold={g.threshold}
+              activeNodeCount={g.activeNodes.length}
+              isOperational={g.isOperational}
+            />
+          ))}
         </div>
       )}
     </div>

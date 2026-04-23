@@ -4,14 +4,16 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { type Address, type Hex, type Abi, keccak256, toHex, encodePacked } from "viem";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useGroupDetails } from "@/hooks/useFactory";
+import { useGroupDetails, useRegisteredNodes, useRemovalRequests } from "@/hooks/useFactory";
 import { useSignetAuth } from "@/hooks/useSignetAuth";
 import { useSignetWrite } from "@/hooks/useSignetWrite";
 import { sessionKeyMaterial } from "@/providers/signetAuth";
 import { adminRequest, type AdminAuthConfig } from "@/lib/signet-sdk/admin";
 import { signetGroup } from "@/config/contracts";
 import { env } from "@/config/env";
-import { loadNodeRegistry, getNodeMetadata, type NodeRegistry } from "@/lib/nodeRegistry";
+import { loadNodeRegistry, getNodeMetadata, type NodeRegistry, type NodeMetadata } from "@/lib/nodeRegistry";
+import { useNodeHealth } from "@/hooks/useNodeApi";
+import { InviteCodeDialog } from "@/components/ui/InviteCodeDialog";
 
 /**
  * Group detail / management page.
@@ -89,9 +91,10 @@ export default function GroupDetailPage() {
     activeNodesResult,
     pendingNodesResult,
     isOperationalResult,
-    _removalDelayResult,
+    removalDelayResult,
     issuersResult,
     authKeysResult,
+    pendingRemovalsResult,
   ] = details ?? [];
 
   const threshold = thresholdResult?.result as bigint | undefined;
@@ -100,6 +103,8 @@ export default function GroupDetailPage() {
   const activeNodes = (activeNodesResult?.result as Address[] | undefined) ?? [];
   const pendingNodes = (pendingNodesResult?.result as Address[] | undefined) ?? [];
   const isOperational = isOperationalResult?.result as boolean | undefined;
+  const removalDelay = removalDelayResult?.result as bigint | undefined;
+  const pendingRemovals = (pendingRemovalsResult?.result as Address[] | undefined) ?? [];
 
   type OAuthIssuer = { issuer: string; clientIds: readonly string[] };
   const issuers = (issuersResult?.result as OAuthIssuer[] | undefined) ?? [];
@@ -145,75 +150,15 @@ export default function GroupDetailPage() {
       {/* Sections */}
       <div className="space-y-12">
         {/* Providers */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-primary-900">
-              Providers
-            </h2>
-            <button
-              disabled
-              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 opacity-50 cursor-not-allowed"
-            >
-              Add Node
-            </button>
-          </div>
-          <div className="space-y-3">
-            {activeNodes.map((node) => {
-              const meta = getNodeMetadata(registry, node);
-              return (
-                <div
-                  key={node}
-                  className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="h-2 w-2 rounded-full bg-success-500" />
-                    <span className="text-sm text-primary-900">
-                      <span className="font-medium">{meta?.name ?? "Unknown Provider"}</span>{" "}
-                      <span className="font-mono text-neutral-400">
-                        ({node.slice(0, 6)}...{node.slice(-4)})
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-success-700">Active</span>
-                    <button
-                      disabled
-                      className="p-1 text-neutral-300 hover:text-error-500 transition-colors opacity-50 cursor-not-allowed"
-                      title="Remove node"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            {pendingNodes.map((node) => {
-              const meta = getNodeMetadata(registry, node);
-              return (
-                <div
-                  key={node}
-                  className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="h-2 w-2 rounded-full bg-accent-400" />
-                    <span className="text-sm text-primary-900">
-                      <span className="font-medium">{meta?.name ?? "Unknown Provider"}</span>{" "}
-                      <span className="font-mono text-neutral-400">
-                        ({node.slice(0, 6)}...{node.slice(-4)})
-                      </span>
-                    </span>
-                  </div>
-                  <span className="text-xs text-accent-600">Pending</span>
-                </div>
-              );
-            })}
-            {activeNodes.length === 0 && pendingNodes.length === 0 && (
-              <p className="text-sm text-neutral-500">No nodes in this group.</p>
-            )}
-          </div>
-        </section>
+        <NodesSection
+          groupAddress={address}
+          activeNodes={activeNodes}
+          pendingNodes={pendingNodes}
+          pendingRemovals={pendingRemovals}
+          threshold={threshold}
+          removalDelay={removalDelay}
+          registry={registry}
+        />
 
         {/* OAuth Issuers */}
         <AddIssuerSection
@@ -229,18 +174,492 @@ export default function GroupDetailPage() {
         />
 
         {/* Time-Lock Queue */}
-        <section>
-          <h2 className="text-lg font-semibold text-primary-900 mb-4">
-            Pending Operations
-          </h2>
-          <p className="text-sm text-neutral-500">
-            {/* TODO: unified time-lock queue */}
-            No pending operations.
-          </p>
-        </section>
+        <PendingOperationsSection
+          groupAddress={address}
+          pendingRemovals={pendingRemovals}
+          registry={registry}
+        />
       </div>
     </div>
   );
+}
+
+function NodesSection({
+  groupAddress,
+  activeNodes,
+  pendingNodes,
+  pendingRemovals,
+  threshold,
+  removalDelay,
+  registry,
+}: {
+  groupAddress: Address;
+  activeNodes: Address[];
+  pendingNodes: Address[];
+  pendingRemovals: Address[];
+  threshold: bigint | undefined;
+  removalDelay: bigint | undefined;
+  registry: NodeRegistry;
+}) {
+  const [showInvite, setShowInvite] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<Address | null>(null);
+  const { write, status, error, reset, needsInviteCode, submitInviteCode } = useSignetWrite();
+  const queryClient = useQueryClient();
+
+  const isSubmitting = status !== "idle" && status !== "success" && status !== "error";
+
+  async function handleInvite(node: Address) {
+    reset();
+    try {
+      await write({
+        address: groupAddress,
+        abi: signetGroup(groupAddress).abi as Abi,
+        functionName: "inviteNode",
+        args: [node],
+      });
+      setShowInvite(false);
+      reset();
+      queryClient.invalidateQueries();
+    } catch {
+      // error captured in hook state
+    }
+  }
+
+  async function handleQueueRemoval(node: Address) {
+    reset();
+    try {
+      await write({
+        address: groupAddress,
+        abi: signetGroup(groupAddress).abi as Abi,
+        functionName: "queueRemoval",
+        args: [node],
+      });
+      setConfirmRemove(null);
+      reset();
+      queryClient.invalidateQueries();
+    } catch {
+      // error captured in hook state
+    }
+  }
+
+  // Filter out nodes that are already pending removal so they only show once
+  const pendingRemovalSet = new Set(pendingRemovals.map((a) => a.toLowerCase()));
+  const displayActiveNodes = activeNodes.filter((a) => !pendingRemovalSet.has(a.toLowerCase()));
+
+  // Can't remove if it would drop active count below threshold
+  const atThreshold = threshold !== undefined && BigInt(activeNodes.length) <= threshold;
+
+  // All nodes already in the group (active, pending invite, pending removal)
+  const existingNodes = new Set([
+    ...activeNodes.map((a) => a.toLowerCase()),
+    ...pendingNodes.map((a) => a.toLowerCase()),
+    ...pendingRemovals.map((a) => a.toLowerCase()),
+  ]);
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-primary-900">Providers</h2>
+        <button
+          onClick={() => { setShowInvite(true); reset(); }}
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+        >
+          Add Node
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {displayActiveNodes.map((node) => {
+          const meta = getNodeMetadata(registry, node);
+          return (
+            <div
+              key={node}
+              className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
+            >
+              <div className="flex items-center gap-3">
+                <span className="h-2 w-2 rounded-full bg-success-500" />
+                <span className="text-sm text-primary-900">
+                  <span className="font-medium">{meta?.name ?? "Unknown Provider"}</span>{" "}
+                  <span className="font-mono text-neutral-400">
+                    ({node.slice(0, 6)}...{node.slice(-4)})
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-success-700">Active</span>
+                <button
+                  onClick={() => setConfirmRemove(node)}
+                  disabled={atThreshold}
+                  className="p-1 text-neutral-300 hover:text-error-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-neutral-300"
+                  title={atThreshold ? "Cannot remove — would drop below threshold" : "Remove node"}
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {pendingNodes.map((node) => {
+          const meta = getNodeMetadata(registry, node);
+          return (
+            <div
+              key={node}
+              className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
+            >
+              <div className="flex items-center gap-3">
+                <span className="h-2 w-2 rounded-full bg-accent-400" />
+                <span className="text-sm text-primary-900">
+                  <span className="font-medium">{meta?.name ?? "Unknown Provider"}</span>{" "}
+                  <span className="font-mono text-neutral-400">
+                    ({node.slice(0, 6)}...{node.slice(-4)})
+                  </span>
+                </span>
+              </div>
+              <span className="text-xs text-accent-600">Pending Invite</span>
+            </div>
+          );
+        })}
+        {pendingRemovals.map((node) => {
+          const meta = getNodeMetadata(registry, node);
+          return (
+            <div
+              key={node}
+              className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3"
+            >
+              <div className="flex items-center gap-3">
+                <span className="h-2 w-2 rounded-full bg-error-400" />
+                <span className="text-sm text-primary-900">
+                  <span className="font-medium">{meta?.name ?? "Unknown Provider"}</span>{" "}
+                  <span className="font-mono text-neutral-400">
+                    ({node.slice(0, 6)}...{node.slice(-4)})
+                  </span>
+                </span>
+              </div>
+              <span className="text-xs text-error-600">Pending Removal</span>
+            </div>
+          );
+        })}
+        {displayActiveNodes.length === 0 && pendingNodes.length === 0 && pendingRemovals.length === 0 && (
+          <p className="text-sm text-neutral-500">No nodes in this group.</p>
+        )}
+      </div>
+
+      {/* Invite node dialog */}
+      {showInvite && (
+        <InviteNodeDialog
+          existingNodes={existingNodes}
+          isSubmitting={isSubmitting}
+          error={status === "error" ? error : null}
+          onInvite={handleInvite}
+          onClose={() => { setShowInvite(false); reset(); }}
+          registry={registry}
+        />
+      )}
+
+      {needsInviteCode && <InviteCodeDialog onSubmit={submitInviteCode} />}
+
+      {/* Confirm removal dialog */}
+      {confirmRemove && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h3 className="text-sm font-semibold text-primary-900">Remove node?</h3>
+            <p className="mt-2 text-sm text-neutral-500">
+              This will queue removal of{" "}
+              <span className="font-medium text-primary-800">
+                {getNodeMetadata(registry, confirmRemove)?.name ?? confirmRemove.slice(0, 10) + "..."}
+              </span>.
+              {removalDelay !== undefined && (
+                <> The node can be removed after a {formatDuration(Number(removalDelay))} delay.</>
+              )}
+            </p>
+            {status === "error" && (
+              <p className="mt-2 text-xs text-error-600">{error?.message}</p>
+            )}
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => { setConfirmRemove(null); reset(); }}
+                disabled={isSubmitting}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleQueueRemoval(confirmRemove)}
+                disabled={isSubmitting}
+                className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors disabled:opacity-50"
+              >
+                {isSubmitting ? "Submitting..." : "Queue Removal"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InviteNodeDialog({
+  existingNodes,
+  isSubmitting,
+  error,
+  onInvite,
+  onClose,
+  registry,
+}: {
+  existingNodes: Set<string>;
+  isSubmitting: boolean;
+  error: Error | null;
+  onInvite: (node: Address) => void;
+  onClose: () => void;
+  registry: NodeRegistry;
+}) {
+  const { data: allNodes, isLoading } = useRegisteredNodes();
+  const nodeAddresses = (allNodes as Address[] | undefined) ?? [];
+  const availableNodes = nodeAddresses.filter(
+    (addr) => !existingNodes.has(addr.toLowerCase()),
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-lg max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-primary-900">Invite Node</h3>
+          <button
+            onClick={onClose}
+            className="text-neutral-400 hover:text-neutral-600 transition-colors"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <p className="text-xs text-neutral-500 mb-4">
+          Select a registered provider to invite to this group.
+        </p>
+
+        {error && (
+          <p className="mb-3 text-xs text-error-600">{error.message}</p>
+        )}
+
+        <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
+          {isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-16 animate-pulse rounded-lg bg-neutral-100" />
+              ))}
+            </div>
+          ) : availableNodes.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-8 text-center">
+              <p className="text-sm text-neutral-500">
+                No available providers to invite.
+              </p>
+            </div>
+          ) : (
+            availableNodes.map((addr) => {
+              const meta = getNodeMetadata(registry, addr);
+              return (
+                <InviteNodeRow
+                  key={addr}
+                  address={addr}
+                  metadata={meta}
+                  isSubmitting={isSubmitting}
+                  onInvite={onInvite}
+                />
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InviteNodeRow({
+  address,
+  metadata,
+  isSubmitting,
+  onInvite,
+}: {
+  address: Address;
+  metadata?: NodeMetadata;
+  isSubmitting: boolean;
+  onInvite: (node: Address) => void;
+}) {
+  const { data: health } = useNodeHealth(metadata?.apiUrl);
+  const isOnline = health?.status === "ok";
+  const initials = (metadata?.name ?? address.slice(2, 4)).slice(0, 2).toUpperCase();
+
+  return (
+    <div className="flex items-center gap-4 rounded-lg border border-neutral-200 bg-white px-4 py-3 hover:border-neutral-300 transition-colors">
+      {metadata?.logo ? (
+        <img src={metadata.logo} alt={metadata.name} className="h-9 w-9 rounded-lg object-cover" />
+      ) : (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary-700 to-primary-500 text-xs font-bold text-white">
+          {initials}
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-primary-900 truncate">
+          {metadata?.name ?? "Unknown Provider"}
+        </p>
+        <p className="font-mono text-xs text-neutral-400">
+          {address.slice(0, 6)}...{address.slice(-4)}
+        </p>
+      </div>
+      {metadata?.apiUrl && (
+        <span
+          className={`inline-flex items-center gap-1 text-xs ${
+            isOnline ? "text-success-600" : "text-neutral-400"
+          }`}
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? "bg-success-500" : "bg-neutral-300"}`} />
+          {isOnline ? "Online" : "Offline"}
+        </span>
+      )}
+      <button
+        onClick={() => onInvite(address)}
+        disabled={isSubmitting}
+        className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
+      >
+        {isSubmitting ? "Inviting..." : "Invite"}
+      </button>
+    </div>
+  );
+}
+
+function PendingOperationsSection({
+  groupAddress,
+  pendingRemovals,
+  registry,
+}: {
+  groupAddress: Address;
+  pendingRemovals: Address[];
+  registry: NodeRegistry;
+}) {
+  const { data: removalData } = useRemovalRequests(groupAddress, pendingRemovals);
+  const { write, status, error, reset, needsInviteCode, submitInviteCode } = useSignetWrite();
+  const queryClient = useQueryClient();
+
+  const isSubmitting = status !== "idle" && status !== "success" && status !== "error";
+
+  async function handleExecuteRemoval(node: Address) {
+    reset();
+    try {
+      await write({
+        address: groupAddress,
+        abi: signetGroup(groupAddress).abi as Abi,
+        functionName: "executeRemoval",
+        args: [node],
+      });
+      reset();
+      queryClient.invalidateQueries();
+    } catch {
+      // error captured in hook state
+    }
+  }
+
+  async function handleCancelRemoval(node: Address) {
+    reset();
+    try {
+      await write({
+        address: groupAddress,
+        abi: signetGroup(groupAddress).abi as Abi,
+        functionName: "cancelRemoval",
+        args: [node],
+      });
+      reset();
+      queryClient.invalidateQueries();
+    } catch {
+      // error captured in hook state
+    }
+  }
+
+  const hasOperations = pendingRemovals.length > 0;
+
+  return (
+    <section>
+      <h2 className="text-lg font-semibold text-primary-900 mb-4">
+        Pending Operations
+      </h2>
+
+      {status === "error" && (
+        <p className="mb-3 text-xs text-error-600">{error?.message}</p>
+      )}
+
+      {!hasOperations ? (
+        <p className="text-sm text-neutral-500">No pending operations.</p>
+      ) : (
+        <div className="space-y-3">
+          {pendingRemovals.map((node, i) => {
+            const meta = getNodeMetadata(registry, node);
+            const req = removalData?.[i]?.result as
+              | { executeAfter: bigint; initiator: Address }
+              | undefined;
+            const executeAfter = req?.executeAfter ? Number(req.executeAfter) : null;
+            const now = Math.floor(Date.now() / 1000);
+            const canExecute = executeAfter !== null && now >= executeAfter;
+            const timeLeft = executeAfter !== null ? Math.max(0, executeAfter - now) : null;
+
+            return (
+              <div
+                key={node}
+                className="flex items-center justify-between rounded-lg border border-error-200 bg-error-50/50 px-4 py-3"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-error-700">Node Removal</span>
+                    <span className="text-sm font-medium text-primary-900">
+                      {meta?.name ?? `${node.slice(0, 6)}...${node.slice(-4)}`}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-neutral-500">
+                    {canExecute
+                      ? "Ready to execute"
+                      : timeLeft !== null
+                      ? `Executable in ${formatDuration(timeLeft)}`
+                      : "Loading..."}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleCancelRemoval(node)}
+                    disabled={isSubmitting}
+                    className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleExecuteRemoval(node)}
+                    disabled={isSubmitting || !canExecute}
+                    className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors disabled:opacity-50"
+                  >
+                    Execute
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {needsInviteCode && <InviteCodeDialog onSubmit={submitInviteCode} />}
+    </section>
+  );
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  return h > 0 ? `${d}d ${h}h` : `${d}d`;
 }
 
 function AddIssuerSection({
@@ -255,7 +674,7 @@ function AddIssuerSection({
   const [clientIds, setClientIds] = useState("");
   const [removingIssuer, setRemovingIssuer] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const { write, status, error, reset } = useSignetWrite();
+  const { write, status, error, reset, needsInviteCode, submitInviteCode } = useSignetWrite();
   const queryClient = useQueryClient();
 
   const isSubmitting = status !== "idle" && status !== "success" && status !== "error";
@@ -409,6 +828,8 @@ function AddIssuerSection({
         )
       )}
 
+      {needsInviteCode && <InviteCodeDialog onSubmit={submitInviteCode} />}
+
       {/* Confirm remove modal */}
       {confirmRemove && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
@@ -459,7 +880,7 @@ function AuthKeysSection({
   const [copied, setCopied] = useState(false);
   const [removingKey, setRemovingKey] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const { write, status, error, reset } = useSignetWrite();
+  const { write, status, error, reset, needsInviteCode, submitInviteCode } = useSignetWrite();
   const queryClient = useQueryClient();
 
   const isSubmitting = status !== "idle" && status !== "success" && status !== "error";
@@ -619,6 +1040,8 @@ function AuthKeysSection({
           </p>
         </div>
       )}
+
+      {needsInviteCode && <InviteCodeDialog onSubmit={submitInviteCode} />}
 
       {/* Confirm remove modal */}
       {confirmRemove && (

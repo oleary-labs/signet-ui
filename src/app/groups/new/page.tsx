@@ -7,6 +7,7 @@ import { useSignetWrite } from "@/hooks/useSignetWrite";
 import { NodeGrid } from "@/components/marketplace/NodeGrid";
 import { loadNodeRegistry, getNodeMetadata, type NodeRegistry } from "@/lib/nodeRegistry";
 import { signetFactory } from "@/config/contracts";
+import { InviteCodeDialog } from "@/components/ui/InviteCodeDialog";
 
 type WizardStep = "threshold" | "nodes" | "review" | "deploy";
 
@@ -21,7 +22,7 @@ type WizardStep = "threshold" | "nodes" | "review" | "deploy";
  */
 export default function CreateGroupPage() {
   const { isAuthenticated, signIn, status, groupPublicKey } = useSignetAuth();
-  const { write, status: deployStatus, error: deployError, txHash, reset: resetDeploy } = useSignetWrite();
+  const { write, status: deployStatus, error: deployError, txHash, reset: resetDeploy, needsInviteCode, submitInviteCode } = useSignetWrite();
   const deployStarted = useRef(false);
 
   const [step, setStep] = useState<WizardStep>("threshold");
@@ -320,6 +321,8 @@ export default function CreateGroupPage() {
           deployStarted={deployStarted}
           write={write}
           resetDeploy={resetDeploy}
+          needsInviteCode={needsInviteCode}
+          submitInviteCode={submitInviteCode}
           onBack={() => {
             resetDeploy();
             deployStarted.current = false;
@@ -340,6 +343,7 @@ const STATUS_LABELS: Record<string, string> = {
   signing: "Requesting threshold signature...",
   submitting: "Submitting to bundler...",
   confirming: "Waiting for on-chain confirmation...",
+  "needs-invite-code": "Invite code required...",
   success: "Group deployed!",
   error: "Deployment failed",
 };
@@ -354,6 +358,8 @@ function DeployStep({
   deployStarted,
   write,
   resetDeploy,
+  needsInviteCode,
+  submitInviteCode,
   onBack,
 }: {
   selectedNodes: Set<string>;
@@ -365,6 +371,8 @@ function DeployStep({
   deployStarted: React.MutableRefObject<boolean>;
   write: ReturnType<typeof useSignetWrite>["write"];
   resetDeploy: () => void;
+  needsInviteCode: boolean;
+  submitInviteCode: (code: string) => void;
   onBack: () => void;
 }) {
   const nodeAddrs = Array.from(selectedNodes) as Address[];
@@ -462,6 +470,7 @@ function DeployStep({
           <p className="text-sm text-neutral-500">
             {STATUS_LABELS[deployStatus] ?? "Processing..."}
           </p>
+          {needsInviteCode && <InviteCodeDialog onSubmit={submitInviteCode} />}
         </>
       )}
     </div>

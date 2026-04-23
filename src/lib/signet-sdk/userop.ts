@@ -27,6 +27,7 @@ import {
   getPaymasterStubData,
   getPaymasterData,
   applyPaymasterSponsorship,
+  type PaymasterContext,
 } from "./bundler";
 
 // ---------------------------------------------------------------------------
@@ -72,6 +73,7 @@ export interface SignetWriteConfig {
   accountFactoryAddress: Address;
   accountFactoryAbi: readonly Record<string, unknown>[];
   usePaymaster: boolean;
+  paymasterContext?: PaymasterContext;
 }
 
 export interface SignetWriteParams {
@@ -131,7 +133,8 @@ export async function submitUserOp(
   if (config.usePaymaster) {
     onStatus?.("sponsoring-stub");
     const stub = await getPaymasterStubData(
-      config.bundlerProxyUrl, config.entryPointAddress, config.chainId, userOp
+      config.bundlerProxyUrl, config.entryPointAddress, config.chainId, userOp,
+      config.paymasterContext,
     );
     userOp = applyPaymasterSponsorship(userOp, stub);
   }
@@ -149,7 +152,8 @@ export async function submitUserOp(
   if (config.usePaymaster) {
     onStatus?.("sponsoring");
     const real = await getPaymasterData(
-      config.bundlerProxyUrl, config.entryPointAddress, config.chainId, userOp
+      config.bundlerProxyUrl, config.entryPointAddress, config.chainId, userOp,
+      config.paymasterContext,
     );
     userOp = applyPaymasterSponsorship(userOp, real);
   }
