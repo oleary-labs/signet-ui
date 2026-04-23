@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { type Address, type Hex, concat, toHex } from "viem";
+import { useReadContract } from "wagmi";
 import { useSignetAuth } from "@/hooks/useSignetAuth";
 import { useSignetWrite } from "@/hooks/useSignetWrite";
 import { NodeGrid } from "@/components/marketplace/NodeGrid";
@@ -23,6 +24,10 @@ type WizardStep = "threshold" | "nodes" | "review" | "deploy";
 export default function CreateGroupPage() {
   const { isAuthenticated, signIn, status, groupPublicKey } = useSignetAuth();
   const { write, status: deployStatus, error: deployError, txHash, reset: resetDeploy, needsInviteCode, submitInviteCode } = useSignetWrite();
+  const { data: minRemovalDelay } = useReadContract({
+    ...signetFactory,
+    functionName: "minRemovalDelay",
+  });
   const deployStarted = useRef(false);
 
   const [step, setStep] = useState<WizardStep>("threshold");
@@ -314,6 +319,7 @@ export default function CreateGroupPage() {
         <DeployStep
           selectedNodes={selectedNodes}
           threshold={threshold}
+          removalDelay={minRemovalDelay as bigint | undefined}
           groupPublicKey={groupPublicKey}
           deployStatus={deployStatus}
           deployError={deployError}
@@ -351,6 +357,7 @@ const STATUS_LABELS: Record<string, string> = {
 function DeployStep({
   selectedNodes,
   threshold,
+  removalDelay,
   groupPublicKey,
   deployStatus,
   deployError,
@@ -364,6 +371,7 @@ function DeployStep({
 }: {
   selectedNodes: Set<string>;
   threshold: number;
+  removalDelay: bigint | undefined;
   groupPublicKey: Hex | null;
   deployStatus: string;
   deployError: Error | null;
@@ -376,7 +384,6 @@ function DeployStep({
   onBack: () => void;
 }) {
   const nodeAddrs = Array.from(selectedNodes) as Address[];
-  const removalDelay = 86400n; // 1 day
 
   // Add user's group key as an initial auth key (Schnorr prefix 0x01)
   const initialAuthKeys: Hex[] = [];
@@ -385,7 +392,7 @@ function DeployStep({
   }
 
   useEffect(() => {
-    if (deployStarted.current) return;
+    if (deployStarted.current || removalDelay === undefined) return;
     deployStarted.current = true;
 
     write({
@@ -396,7 +403,7 @@ function DeployStep({
     }).catch(() => {
       // error is captured in deployError state
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [removalDelay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function retry() {
     resetDeploy();

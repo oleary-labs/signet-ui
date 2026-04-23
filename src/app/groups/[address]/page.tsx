@@ -43,6 +43,43 @@ export default function GroupDetailPage() {
     bootstrapNodes: env.bootstrapNodes,
   };
 
+  interface ReshareStatus {
+    group_id?: string;
+    status: "active" | "resharing";
+    keys_total?: number;
+    keys_done?: number;
+    keys_stale?: number;
+    started_at?: string;
+    is_coordinator?: boolean;
+  }
+
+  const { data: reshareStatus } = useQuery<ReshareStatus | null>({
+    queryKey: ["reshare-status", address],
+    queryFn: async () => {
+      if (!authKeyPub || !sessionKeyMaterial.keypair || !claims) return null;
+      try {
+        return await adminRequest<ReshareStatus>(
+          adminConfig,
+          env.bootstrapNodes[0],
+          "/admin/reshare/status",
+          address,
+          authKeyPub,
+          sessionKeyMaterial.keypair,
+          claims,
+        );
+      } catch (e) {
+        console.error("[reshare-status]", e);
+        return null;
+      }
+    },
+    enabled: !!authKeyPub && !!sessionKeyMaterial.keypair && !!claims,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return data?.status === "resharing" ? 3_000 : 30_000;
+    },
+    retry: 1,
+  });
+
   const { data: keyCount } = useQuery({
     queryKey: ["admin-keys-count", address],
     queryFn: async () => {
@@ -146,6 +183,36 @@ export default function GroupDetailPage() {
           mono
         />
       </div>
+
+      {/* Reshare progress */}
+      {reshareStatus?.status === "resharing" && !!reshareStatus.keys_total && reshareStatus.keys_done !== reshareStatus.keys_total && (
+        <div className="mb-12 rounded-lg border border-accent-200 bg-accent-50/50 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent-300 border-t-accent-600" />
+              <span className="text-sm font-semibold text-accent-800">
+                Key reshare in progress
+              </span>
+            </div>
+            <span className="text-xs text-accent-600">
+              {reshareStatus.keys_done} / {reshareStatus.keys_total} keys
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-accent-200 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-accent-500 transition-all duration-500"
+              style={{
+                width: `${reshareStatus.keys_total ? (reshareStatus.keys_done! / reshareStatus.keys_total) * 100 : 0}%`,
+              }}
+            />
+          </div>
+          {reshareStatus.keys_stale != null && reshareStatus.keys_stale > 0 && (
+            <p className="mt-1.5 text-xs text-accent-600">
+              {reshareStatus.keys_stale} key{reshareStatus.keys_stale === 1 ? "" : "s"} remaining
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Sections */}
       <div className="space-y-12">
