@@ -5,14 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "circuit:rebuild": "cd ../signet-protocol/circuits/jwt_auth && nargo compile --force && cp target/jwt_auth.json ../../signet-ui/public/circuits/jwt_auth.json"
+    "start": "node .next/standalone/server.js",
+    "lint": "eslint"
   },
   "dependencies": {
-    "@aztec/bb.js": "0.82.2",
+    "@oleary-labs/signet-circuits": "0.1.0",
+    "@aztec/bb.js": "3.0.0-nightly.20251104",
     "@noble/secp256k1": "^3.1.0",
-    "@noir-lang/noir_js": "1.0.0-beta.11",
+    "@noir-lang/noir_js": "1.0.0-beta.15",
     "@tanstack/react-query": "^5.99.0",
     "lightningcss": "^1.32.0",
     "next": "16.2.4",

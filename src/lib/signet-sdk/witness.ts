@@ -26,7 +26,7 @@ export interface FullCircuitWitness {
   expected_azp: { storage: number[]; len: number };
 
   // Session binding (public input)
-  session_pub: number[];
+  _session_pub: number[];
 }
 
 /**
@@ -70,7 +70,7 @@ export async function buildFullWitness(
     expected_azp: toBoundedVec(claims.azp, 128),
 
     // Session binding
-    session_pub: sessionPubBytes,
+    _session_pub: sessionPubBytes,
   };
 }
 
@@ -92,7 +92,7 @@ export function witnessToProverToml(w: FullCircuitWitness): string {
   lines.push(
     `pubkey_modulus_limbs = [${w.pubkey_modulus_limbs.map((l) => `"${l}"`).join(", ")}]`
   );
-  lines.push(`session_pub = [${w.session_pub.join(", ")}]`);
+  lines.push(`_session_pub = [${w._session_pub.join(", ")}]`);
   lines.push("");
 
   // BoundedVec tables

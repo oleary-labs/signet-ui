@@ -11,6 +11,7 @@
 
 import { Noir } from "@noir-lang/noir_js";
 import { UltraHonkBackend } from "@aztec/bb.js";
+import { jwt as jwtArtifacts, assertBbJsVersion } from "@oleary-labs/signet-circuits";
 import { decodeIdToken } from "./oauth";
 import { getJWKSKeyForKid, decodeModulusBytes } from "./jwks";
 import { buildFullWitness } from "./witness";
@@ -24,23 +25,8 @@ export interface ProofResult {
   claims: IdTokenClaims;
 }
 
-// Compiled circuit artifact — loaded once, cached.
-let circuitPromise: Promise<object> | null = null;
-
-function loadCircuit(): Promise<object> {
-  if (!circuitPromise) {
-    circuitPromise = fetch("/circuits/jwt_auth.json").then((res) => {
-      if (!res.ok) {
-        throw new Error(
-          `Failed to load circuit artifact: ${res.status}. ` +
-            "Run 'npm run circuit:rebuild' to compile and copy the circuit."
-        );
-      }
-      return res.json();
-    });
-  }
-  return circuitPromise;
-}
+// Circuit artifact from @signet/circuits — embedded at build time.
+const circuit = jwtArtifacts.circuit;
 
 /**
  * Generate a ZK proof that a JWT is valid — entirely client-side.
@@ -74,14 +60,16 @@ export async function generateJWTProof(
   const sessionPubBytes = Array.from(hexToBytes(sessionPubHex));
   const witness = await buildFullWitness(jwt, jsonWebKey, claims, sessionPubBytes);
 
-  // 4. Load compiled circuit and generate ACIR witness
-  const circuit = await loadCircuit();
+  // 4. Version check — fail fast if bb.js doesn't match the circuit artifacts.
+  await assertBbJsVersion();
+
+  // 5. Generate ACIR witness from compiled circuit
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const noir = new Noir(circuit as any);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { witness: acirWitness } = await noir.execute(witness as any);
 
-  // 5. Generate UltraHonk proof via bb.js WASM
+  // 6. Generate UltraHonk proof via bb.js WASM
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const backend = new UltraHonkBackend((circuit as any).bytecode);
   const proofData = await backend.generateProof(acirWitness);
