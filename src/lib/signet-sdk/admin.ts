@@ -82,8 +82,35 @@ export async function buildAdminAuth(
 
 /**
  * Call an admin endpoint with auth.
+ *
+ * If the signing request fails with a 401 "session not found" error and
+ * a reauthenticate callback is provided, re-establishes the node session
+ * and retries once.
  */
 export async function adminRequest<T>(
+  config: AdminAuthConfig,
+  nodeUrl: string,
+  path: string,
+  groupId: string,
+  authKeyPub: string,
+  sessionKeypair: SessionKeypair,
+  claims: IdTokenClaims,
+  extraBody?: Record<string, unknown>,
+  reauthenticate?: () => Promise<void>,
+): Promise<T> {
+  try {
+    return await adminRequestInner<T>(config, nodeUrl, path, groupId, authKeyPub, sessionKeypair, claims, extraBody);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (reauthenticate && /session not found/i.test(msg)) {
+      await reauthenticate();
+      return await adminRequestInner<T>(config, nodeUrl, path, groupId, authKeyPub, sessionKeypair, claims, extraBody);
+    }
+    throw err;
+  }
+}
+
+async function adminRequestInner<T>(
   config: AdminAuthConfig,
   nodeUrl: string,
   path: string,

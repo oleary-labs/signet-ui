@@ -53,6 +53,7 @@ export interface SignetAuthState {
   error: Error | null;
   signIn: () => Promise<void>;
   signOut: () => void;
+  reauthenticate: () => Promise<void>;
 }
 
 export const SignetAuthContext = createContext<SignetAuthState | null>(null);
@@ -221,6 +222,50 @@ export function SignetAuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const reauthenticate = useCallback(async () => {
+    const jwt = sessionStorage.getItem("signet_id_token");
+    if (!jwt || !sessionKeyMaterial.keypair) {
+      throw new Error("No session to reauthenticate — sign in again");
+    }
+
+    const decoded = decodeIdToken(jwt);
+    if (decoded.exp * 1000 < Date.now()) {
+      sessionStorage.removeItem("signet_id_token");
+      throw new Error("ID token has expired — sign in again");
+    }
+
+    if (env.bootstrapNodes.length === 0 || env.bootstrapGroup === "0x") return;
+
+    let proof: Uint8Array;
+    let modulusBytes: Uint8Array;
+
+    if (env.useServerProver) {
+      const serverResult = await generateServerProof(
+        "/api/bundler",
+        jwt,
+        sessionKeyMaterial.keypair.publicKeyHex,
+      );
+      proof = serverResult.proof;
+      modulusBytes = serverResult.jwksModulus;
+    } else {
+      const clientResult = await generateJWTProof(jwt, sessionKeyMaterial.keypair.publicKeyHex);
+      proof = clientResult.proof;
+      modulusBytes = await getJWTModulusBytes(jwt);
+    }
+
+    await authenticateWithBootstrap(
+      {
+        groupId: env.bootstrapGroup,
+        nodeUrls: env.bootstrapNodes,
+        proxyEndpoint: "/api/node/proxy",
+      },
+      proof,
+      sessionKeyMaterial.keypair.publicKeyHex,
+      decoded,
+      modulusBytes,
+    );
+  }, []);
+
   const signOut = useCallback(() => {
     setAccount(null);
     setGroupPublicKey(null);
@@ -249,6 +294,7 @@ export function SignetAuthProvider({ children }: { children: ReactNode }) {
         error,
         signIn,
         signOut,
+        reauthenticate,
       }}
     >
       {children}

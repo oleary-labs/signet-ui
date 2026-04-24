@@ -28,7 +28,7 @@ export default function GroupDetailPage() {
   const params = useParams();
   const address = params.address as Address;
 
-  const { account, groupPublicKey, claims } = useSignetAuth();
+  const { account, groupPublicKey, claims, reauthenticate } = useSignetAuth();
   const { data: details, isLoading } = useGroupDetails(address);
   const [registry, setRegistry] = useState<NodeRegistry>({});
 
@@ -66,6 +66,8 @@ export default function GroupDetailPage() {
           authKeyPub,
           sessionKeyMaterial.keypair,
           claims,
+          undefined,
+          reauthenticate,
         );
       } catch (e) {
         console.error("[reshare-status]", e);
@@ -93,6 +95,8 @@ export default function GroupDetailPage() {
           authKeyPub,
           sessionKeyMaterial.keypair,
           claims,
+          undefined,
+          reauthenticate,
         );
         return keys.length;
       } catch (e) {

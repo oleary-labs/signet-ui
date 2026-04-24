@@ -53,36 +53,39 @@ Implemented across `providers/signetAuth.tsx`, `hooks/useSignetWrite.ts`, `lib/s
 - [x] **Paymaster sponsorship (ERC-7677)** — opt-in `pm_getPaymasterStubData` / `pm_getPaymasterData`, gated by `NEXT_PUBLIC_USE_PAYMASTER`, packed into `paymasterAndData` by `applyPaymasterSponsorship`
 - [x] **UserOp nonce** — fetched from `EntryPoint.getNonce(sender, 0)` in `useSignetWrite`
 - [x] **Gas estimation** — `eth_estimateUserOperationGas` called pre-sign; paymaster stub attached first so estimate includes paymaster verification
+- [x] **Session re-auth** — `reauthenticate()` in auth provider; `adminRequest` retries on "session not found"
 
 ### Group creation flow
-- [ ] **Deploy step** — Connect the wizard's deploy step to real UserOp submission. Call `SignetFactory.createGroup` via `useSignetWrite`.
-- [ ] **Application key generation** — Generate a secp256k1 keypair during deploy. Include the compressed public key in `initialAuthKeys`. Display the private key with a "save your key" UX.
+- [x] **Deploy step** — Wizard deploy step calls `SignetFactory.createGroup` via `useSignetWrite`. Includes invite code whitelist flow.
+- [x] **Transaction progress UI** — Real-time status: building → sponsoring → estimating → signing → submitting → confirming → success/error. Retry on failure.
+- [x] **Initial auth key** — User's bootstrap group public key added as initial Schnorr auth key during deploy.
+- [ ] **Standalone application key generation** — Generate a separate secp256k1 keypair during deploy with a "save your key" show-once UX (currently only the bootstrap group key is added).
 - [ ] **Post-deploy keygen trigger** — After on-chain confirmation, trigger DKG by calling `/v1/keygen` on one of the group's nodes.
-- [ ] **Transaction progress UI** — Show real-time status during deploy: building → signing → submitting → confirming → done.
 
 ### Marketplace enhancements
-- [ ] **Per-node on-chain data** — `NodeCardWithData` should call `useNodeOnChain(address)` to fetch the real NodeInfo (isOpen, registeredAt, operator), not placeholders.
-- [ ] **Off-chain metadata integration** — Load `node-registry.json` and pass metadata to `NodeCard` components. Wire up the `nodeRegistry.ts` loader.
-- [ ] **Node group count** — Call `getNodeGroups(address)` and display the count on each card.
-- [ ] **Filter and sort** — Add controls above the grid: filter by open/permissioned, sort by registration date or group count.
+- [x] **Off-chain metadata integration** — `loadNodeRegistry()` wired up; `getNodeMetadata()` used for branding/description on NodeCard.
+- [ ] **Per-node on-chain data** — NodeCard still hardcodes `isOpen` and `registeredAt` instead of calling `useNodeOnChain(address)`.
+- [ ] **Node group count** — `useNodeGroups()` hook exists but isn't called or displayed on NodeCard.
+- [ ] **Filter and sort** — No filter/sort controls on NodeGrid.
 
 ### Dashboard
-- [ ] **List user's groups** — Walk all groups from factory (no enumeration function exists — may need to query `GroupCreated` events or add a factory view function). Filter by `manager() === account`.
-- [ ] **Group summary cards** — Each card shows: address, threshold/quorum, active node count, operational status, pending operation count.
-- [ ] **Link to group detail** — Each card links to `/groups/[address]`.
+- [x] **List user's groups** — `useAllGroups()` multicall fetches `manager()` for each group; filters by account.
+- [x] **Link to group detail** — GroupCard links to `/groups/[address]`.
+- [x] **Group summary cards** — Shows address, threshold (t-of-n), active node count, operational status. Missing: pending operation count.
 
 ### Group detail page
-- [ ] **OAuth issuer section** — Render active issuers from `getIssuers()`. Add queue/execute/cancel actions.
-- [ ] **Auth key section** — Render active keys from `getAuthKeys()`. Add queue/execute/cancel actions.
-- [ ] **Time-lock queue** — Unified view of all pending operations: pending removals (`getPendingRemovals()`), pending issuer additions/removals, pending auth key additions/removals. Show countdown timers and execute buttons.
-- [ ] **Invite node action** — Form to invite a new node by address.
-- [ ] **Node health indicators** — Show health status on each node in the membership list (requires API URL from registry).
+- [x] **OAuth issuer section** — `AddIssuerSection` renders `getIssuers()` with add/remove forms and queue/execute actions.
+- [x] **Auth key section** — `AuthKeysSection` renders `getAuthKeys()`, supports key generation with private key display and removal.
+- [x] **Invite node action** — `InviteNodeDialog` modal queries registered nodes, filters existing members, shows health status.
+- [x] **Node health indicators** — `useNodeHealth()` fetches from apiUrl; green/amber/red dots on active/pending/removed nodes.
+- [ ] **Time-lock queue** — `PendingOperationsSection` covers pending node removals with countdowns, but does not yet unify issuer/auth key pending operations.
 
 ### Infrastructure
-- [ ] **Google Fonts** — Add Inter and JetBrains Mono font files locally (Google Fonts import was removed due to build issues in sandboxed env). Or use `next/font/google` once building in a network-enabled env.
-- [ ] **Error boundaries** — Add React error boundaries around contract reads and node API calls.
-- [ ] **Loading states** — The group detail page needs better loading UX for the multicall.
-- [ ] **Mobile responsiveness** — The grid and wizard need mobile layout testing.
+- [x] **Dockerfile + standalone output** — Multi-stage Docker build for Railway deployment.
+- [x] **Loading states** — Skeleton loaders (animate-pulse) on group detail, dashboard GroupCardSkeleton, deploy step status labels.
+- [ ] **Google Fonts** — Still using fallback system fonts; Inter/JetBrains Mono not loaded.
+- [ ] **Error boundaries** — No React error boundaries; errors only caught in hook state.
+- [ ] **Mobile responsiveness** — Basic max-width containers but limited responsive breakpoints.
 
 ### Future (from design doc open questions)
 - [ ] Decentralized node metadata (IPFS, ENS, or on-chain registry)
