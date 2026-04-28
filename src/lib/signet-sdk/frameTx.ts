@@ -112,7 +112,7 @@ const SIGNET_FRAME_ACCOUNT_ABI = [
  */
 export function buildVerifyFrame(
   accountAddress: Address,
-  gasLimit = 200_000n,
+  gasLimit = 1_000_000n,
 ): Frame {
   return {
     mode: FrameMode.VERIFY,

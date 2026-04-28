@@ -26,7 +26,7 @@ import {
 // Config — hardcoded for ethrex EIP-8141 testnet (chain 1729)
 // ---------------------------------------------------------------------------
 
-const FRAME_ACCOUNT: Address = "0xf8F3FEa1BB0fE201cE3c913C7Eef31f0DB14bCD4";
+const FRAME_ACCOUNT: Address = "0xe69caD011C4ed040d650899593a96C1428C5F05c";
 
 // ---------------------------------------------------------------------------
 // Status labels
@@ -86,10 +86,7 @@ export default function FrameDemoPage() {
       const value = amount ? BigInt(Math.floor(parseFloat(amount) * 1e18)) : 0n;
       const innerCalldata = (calldata || "0x") as Hex;
 
-      const [nonce, gasFees] = await Promise.all([
-        fetchFrameTxNonce(ETHREX_RPC_URL, FRAME_ACCOUNT),
-        fetchGasFees(ETHREX_RPC_URL),
-      ]);
+      const nonce = await fetchFrameTxNonce(ETHREX_RPC_URL, FRAME_ACCOUNT);
 
       const verifyFrame = buildVerifyFrame(FRAME_ACCOUNT);
       const senderFrame = buildSenderFrame(
@@ -104,8 +101,9 @@ export default function FrameDemoPage() {
         nonce,
         sender: FRAME_ACCOUNT,
         frames: [verifyFrame, senderFrame],
-        maxPriorityFeePerGas: gasFees.maxPriorityFeePerGas,
-        maxFeePerGas: gasFees.maxFeePerGas,
+        // Use the same gas values as the ethrex demo
+        maxPriorityFeePerGas: 1000000000n,
+        maxFeePerGas: 1000000014n,
         maxFeePerBlobGas: 0n,
         blobVersionedHashes: [],
       };
@@ -161,6 +159,13 @@ export default function FrameDemoPage() {
       // Encode and submit
       setStatus("submitting");
       const rawTx = encodeFrameTransaction(tx);
+      console.log("[frame-demo] sigHash:", hash);
+      console.log("[frame-demo] FROST sig:", ethereum_signature);
+      console.log("[frame-demo] VERIFY data:", tx.frames[0].data);
+      console.log("[frame-demo] SENDER data:", tx.frames[1].data);
+      console.log("[frame-demo] nonce:", nonce.toString());
+      console.log("[frame-demo] rawTx length:", (rawTx.length - 2) / 2, "bytes");
+      console.log("[frame-demo] rawTx:", rawTx.slice(0, 100) + "...");
       const hash2 = await sendFrameTransaction(ETHREX_RPC_URL, rawTx);
       setTxHash(hash2);
 
