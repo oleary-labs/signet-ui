@@ -29,11 +29,13 @@ import {
 /** EIP-8141 transaction type prefix. */
 const FRAME_TX_TYPE = 0x06;
 
-/** Frame modes. */
+/** Frame modes (packed u32: low 8 bits = execution mode, bits 8-9 = allowed scope). */
 export const FrameMode = {
-  DEFAULT: 0,
-  VERIFY: 1,
-  SENDER: 2,
+  DEFAULT: 0x0000,
+  VERIFY_SCOPE3: 0x0301, // VERIFY + allowed_scope=3 (combined sender+payer)
+  VERIFY_SCOPE1: 0x0101, // VERIFY + allowed_scope=1 (sender only)
+  VERIFY_SCOPE2: 0x0201, // VERIFY + allowed_scope=2 (payer only)
+  SENDER: 0x0002,
 } as const;
 
 /** APPROVE scope flags. */
@@ -52,7 +54,7 @@ export const ETHREX_RPC_URL = "https://demo.eip-8141.ethrex.xyz/rpc";
 // ---------------------------------------------------------------------------
 
 export interface Frame {
-  mode: 0 | 1 | 2;
+  mode: number;
   target: Address;
   gasLimit: bigint;
   data: Hex;
@@ -112,10 +114,10 @@ const SIGNET_FRAME_ACCOUNT_ABI = [
  */
 export function buildVerifyFrame(
   accountAddress: Address,
-  gasLimit = 1_000_000n,
+  gasLimit = 200_000n,
 ): Frame {
   return {
-    mode: FrameMode.VERIFY,
+    mode: FrameMode.VERIFY_SCOPE3,
     target: accountAddress,
     gasLimit,
     data: "0x", // placeholder — filled with encoded verifyAndApprove(sig) after signing
@@ -211,7 +213,7 @@ export function computeSigHash(tx: FrameTransaction): Hex {
   const elided: FrameTransaction = {
     ...tx,
     frames: tx.frames.map((f) =>
-      f.mode === FrameMode.VERIFY ? { ...f, data: "0x" as Hex } : f,
+      (f.mode & 0xFF) === 1 ? { ...f, data: "0x" as Hex } : f, // VERIFY = low byte 1
     ),
   };
   return keccak256(encodeFrameTransaction(elided));

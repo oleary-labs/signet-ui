@@ -26,7 +26,7 @@ import {
 // Config — hardcoded for ethrex EIP-8141 testnet (chain 1729)
 // ---------------------------------------------------------------------------
 
-const FRAME_ACCOUNT: Address = "0xe69caD011C4ed040d650899593a96C1428C5F05c";
+const FRAME_ACCOUNT: Address = "0x0C08c0d1bc9B1f7F29d45b2741C0c371c6536AA6";
 
 // ---------------------------------------------------------------------------
 // Status labels
@@ -148,7 +148,7 @@ export default function FrameDemoPage() {
         nonce: tx.nonce.toString(),
         sender: tx.sender,
         frames: tx.frames.map((f) => ({
-          mode: f.mode === FrameMode.VERIFY ? "VERIFY" : f.mode === FrameMode.SENDER ? "SENDER" : "DEFAULT",
+          mode: (f.mode & 0xFF) === 1 ? "VERIFY" : (f.mode & 0xFF) === 2 ? "SENDER" : "DEFAULT",
           target: f.target,
           gasLimit: f.gasLimit.toString(),
           dataLength: (f.data.length - 2) / 2 + " bytes",
