@@ -22,5 +22,13 @@
     "logo": "https://olearylabs.com/logo-mark.svg",
     "category": "Testnet",
     "apiUrl": "http://44.205.254.164:8080"
+  },
+  "0x7993f6B2f88b246789717A2695C26A5c55Fa17c8": {
+    "name": "SFLuv Testnet Node (GCP)",
+    "description": "SFLuv Signet testnet node running on GCP (us-central1-a). External operator node joining the Sepolia bootstrap group.",
+    "website": "https://sfluv.org/",
+    "logo": "https://sfluv.org/wp-content/uploads/2024/06/cropped-SFLUV-Currency-Symbol-Logo-1.png",
+    "category": "Testnet",
+    "apiUrl": "http://136.119.229.55:8080"
   }
 }
