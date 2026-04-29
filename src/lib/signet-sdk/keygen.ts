@@ -31,9 +31,10 @@ export async function keygen(
   config: KeygenConfig,
   keypair: SessionKeypair,
   claims: IdTokenClaims,
-  keySuffix?: string
+  keySuffix?: string,
+  identity?: string,
 ): Promise<KeygenResult> {
-  const req = await signKeygenRequest(keypair, claims, config.groupId, keySuffix);
+  const req = await signKeygenRequest(keypair, claims, config.groupId, keySuffix, identity);
 
   // Try the first node (keygen only needs to be initiated on one node)
   const nodeUrl = config.nodeUrls[0];

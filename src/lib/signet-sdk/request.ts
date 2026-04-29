@@ -32,22 +32,26 @@ export interface SignedSignRequest extends SignedRequest {
  * For OAuth sessions: iss:sub or iss:sub:suffix
  * e.g. https://accounts.google.com:114810956681671373980
  */
-export function deriveKeyId(claims: IdTokenClaims, keySuffix?: string): string {
-  const base = `${claims.iss}:${claims.sub}`;
+export function deriveKeyId(claims: IdTokenClaims, keySuffix?: string, identity?: string): string {
+  const base = identity ?? `${claims.iss}:${claims.sub}`;
   return keySuffix ? `${base}:${keySuffix}` : base;
 }
 
 /**
  * Build and sign a keygen request.
+ *
+ * @param identity - For auth key cert sessions, pass the identity string.
+ *   The key ID becomes `identity[:suffix]` instead of `iss:sub[:suffix]`.
  */
 export async function signKeygenRequest(
   keypair: SessionKeypair,
   claims: IdTokenClaims,
   groupId: string,
-  keySuffix?: string
+  keySuffix?: string,
+  identity?: string,
 ): Promise<SignedRequest> {
   const normalizedGroupId = groupId.toLowerCase();
-  const keyId = deriveKeyId(claims, keySuffix);
+  const keyId = deriveKeyId(claims, keySuffix, identity);
   const nonce = generateNonce();
   const timestamp = Math.floor(Date.now() / 1000);
 
@@ -72,10 +76,11 @@ export async function signSignRequest(
   claims: IdTokenClaims,
   groupId: string,
   messageHash: Uint8Array,
-  keySuffix?: string
+  keySuffix?: string,
+  identity?: string,
 ): Promise<SignedSignRequest> {
   const normalizedGroupId = groupId.toLowerCase();
-  const keyId = deriveKeyId(claims, keySuffix);
+  const keyId = deriveKeyId(claims, keySuffix, identity);
   const nonce = generateNonce();
   const timestamp = Math.floor(Date.now() / 1000);
 
