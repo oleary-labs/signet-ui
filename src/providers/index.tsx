@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { env } from "@/config/env";
 import { getActiveChain } from "@/config/chains";
 import { SignetAuthProvider } from "./signetAuth";
+import { TxStatusProvider } from "./txStatus";
 
 const activeChain = getActiveChain();
 const otherChains = [foundry, sepolia, baseSepolia].filter(c => c.id !== activeChain.id);
@@ -34,7 +35,9 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <SignetAuthProvider>{children}</SignetAuthProvider>
+        <SignetAuthProvider>
+          <TxStatusProvider>{children}</TxStatusProvider>
+        </SignetAuthProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );
