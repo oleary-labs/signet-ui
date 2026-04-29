@@ -160,10 +160,10 @@ export default function KeysTestingPage() {
   const { data: keys, isLoading: keysLoading } = useQuery<KeyInfo[]>({
     queryKey: ["keys-full", address],
     queryFn: async () => {
-      if (!authKeyPub || !sessionKeyMaterial.keypair || !claims) return [];
+      if (!authKeyPub || !sessionKeyMaterial.keypair || !claims || targetNodeUrls.length === 0) return [];
       return adminRequest<KeyInfo[]>(
         adminConfig,
-        env.bootstrapNodes[0],
+        targetNodeUrls[0],
         "/admin/keys",
         address,
         authKeyPub,
@@ -180,10 +180,10 @@ export default function KeysTestingPage() {
   const { data: reshareStatus } = useQuery<ReshareStatus | null>({
     queryKey: ["reshare-status-keys", address],
     queryFn: async () => {
-      if (!authKeyPub || !sessionKeyMaterial.keypair || !claims) return null;
+      if (!authKeyPub || !sessionKeyMaterial.keypair || !claims || targetNodeUrls.length === 0) return null;
       return adminRequest<ReshareStatus>(
         adminConfig,
-        env.bootstrapNodes[0],
+        targetNodeUrls[0],
         "/admin/reshare/status",
         address,
         authKeyPub,
