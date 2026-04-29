@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { type Address, type Hex, type Abi, keccak256, toHex, encodePacked } from "viem";
 import { useQuery } from "@tanstack/react-query";
 import { useGroupDetails, useRegisteredNodes, useRemovalRequests } from "@/hooks/useFactory";
@@ -28,7 +29,10 @@ export default function GroupDetailPage() {
   const address = params.address as Address;
 
   const { account, groupPublicKey, claims, reauthenticate } = useSignetAuth();
-  const { data: details, isLoading } = useGroupDetails(address);
+  const { data: details, isLoading, refetch } = useGroupDetails(address);
+
+  // Refetch on mount (handles back-navigation with stale cache)
+  useEffect(() => { refetch(); }, [refetch]);
   const [registry, setRegistry] = useState<NodeRegistry>({});
 
   useEffect(() => {
@@ -108,7 +112,7 @@ export default function GroupDetailPage() {
     retry: 1,
   });
 
-  if (isLoading) {
+  if (isLoading || !details || details.length === 0) {
     return (
       <div className="mx-auto max-w-7xl px-6 py-12">
         <div className="animate-pulse space-y-4">
@@ -169,11 +173,13 @@ export default function GroupDetailPage() {
           label="Threshold"
           value={threshold !== undefined ? `${threshold} of ${activeNodes.length}` : "-"}
         />
-        <StatCard
-          label="Keys"
-          value={keyCount != null ? String(keyCount) : "—"}
-          muted={keyCount == null}
-        />
+        <Link href={`/groups/${address}/keys`}>
+          <StatCard
+            label="Keys"
+            value={keyCount != null ? String(keyCount) : "—"}
+            muted={keyCount == null}
+          />
+        </Link>
         <StatCard
           label="Manager"
           value={
