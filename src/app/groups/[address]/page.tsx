@@ -273,7 +273,7 @@ function NodesSection({
 }) {
   const [showInvite, setShowInvite] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<Address | null>(null);
-  const { submit } = useTxStatus();
+  const { submit, isBusy } = useTxStatus();
 
   function handleInvite(node: Address) {
     submit("Inviting node...", {
@@ -315,7 +315,8 @@ function NodesSection({
         <h2 className="text-lg font-semibold text-primary-900">Providers</h2>
         <button
           onClick={() => { setShowInvite(true); }}
-          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+          disabled={isBusy}
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors disabled:opacity-50"
         >
           Add Node
         </button>
@@ -342,7 +343,7 @@ function NodesSection({
                 <span className="text-xs text-success-700">Active</span>
                 <button
                   onClick={() => setConfirmRemove(node)}
-                  disabled={atThreshold}
+                  disabled={atThreshold || isBusy}
                   className="p-1 text-neutral-300 hover:text-error-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-neutral-300"
                   title={atThreshold ? "Cannot remove — would drop below threshold" : "Remove node"}
                 >
@@ -434,7 +435,7 @@ function NodesSection({
               </button>
               <button
                 onClick={() => handleQueueRemoval(confirmRemove)}
-                disabled={false}
+                disabled={isBusy}
                 className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors disabled:opacity-50"
               >
                 Queue Removal
@@ -556,8 +557,7 @@ function InviteNodeRow({
       )}
       <button
         onClick={() => onInvite(address)}
-        disabled={false}
-        className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
+        className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 transition-colors"
       >
         Invite
       </button>
@@ -575,9 +575,11 @@ function PendingOperationsSection({
   registry: NodeRegistry;
 }) {
   const { data: removalData } = useRemovalRequests(groupAddress, pendingRemovals);
-  const { submit } = useTxStatus();
+  const { submit, isBusy } = useTxStatus();
+  const [confirmExecute, setConfirmExecute] = useState<Address | null>(null);
 
   function handleExecuteRemoval(node: Address) {
+    setConfirmExecute(null);
     submit("Executing removal...", {
       address: groupAddress,
       abi: signetGroup(groupAddress).abi as Abi,
@@ -640,13 +642,14 @@ function PendingOperationsSection({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleCancelRemoval(node)}
-                    className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+                    disabled={isBusy}
+                    className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={() => handleExecuteRemoval(node)}
-                    disabled={!canExecute}
+                    onClick={() => setConfirmExecute(node)}
+                    disabled={!canExecute || isBusy}
                     className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors disabled:opacity-50"
                   >
                     Execute
@@ -658,6 +661,35 @@ function PendingOperationsSection({
         </div>
       )}
 
+      {/* Confirm execute removal dialog */}
+      {confirmExecute && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h3 className="text-sm font-semibold text-primary-900">Execute node removal?</h3>
+            <p className="mt-2 text-sm text-neutral-500">
+              This will permanently remove{" "}
+              <span className="font-medium text-primary-800">
+                {getNodeMetadata(registry, confirmExecute)?.name ?? `${confirmExecute.slice(0, 10)}...`}
+              </span>{" "}
+              from the group. This action cannot be undone.
+            </p>
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmExecute(null)}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleExecuteRemoval(confirmExecute)}
+                className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors"
+              >
+                Execute Removal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -686,7 +718,7 @@ function AddIssuerSection({
   const [issuerUrl, setIssuerUrl] = useState("");
   const [clientIds, setClientIds] = useState("");
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const { submit } = useTxStatus();
+  const { submit, isBusy } = useTxStatus();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -729,7 +761,8 @@ function AddIssuerSection({
         </div>
         <button
           onClick={() => { setShowForm(!showForm); }}
-          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+          disabled={isBusy}
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors disabled:opacity-50"
         >
           {showForm ? "Cancel" : "Add Issuer"}
         </button>
@@ -799,7 +832,7 @@ function AddIssuerSection({
               </div>
               <button
                 onClick={() => setConfirmRemove(iss.issuer)}
-                disabled={false}
+                disabled={isBusy}
                 className="p-1 text-neutral-300 hover:text-error-500 transition-colors disabled:opacity-50"
                 title="Remove issuer"
               >
@@ -864,7 +897,8 @@ function AuthKeysSection({
   const [generatedKey, setGeneratedKey] = useState<{ privateKey: string; publicKey: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const { submit } = useTxStatus();
+  const [confirmGenerate, setConfirmGenerate] = useState(false);
+  const { submit, isBusy } = useTxStatus();
 
   async function handleGenerate() {
     const { utils, getPublicKey } = await import("@noble/secp256k1");
@@ -921,13 +955,40 @@ function AuthKeysSection({
           </p>
         </div>
         <button
-          onClick={handleGenerate}
-          disabled={false}
+          onClick={() => setConfirmGenerate(true)}
+          disabled={isBusy}
           className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors disabled:opacity-50"
         >
           Generate Key
         </button>
       </div>
+
+      {/* Confirm generate dialog */}
+      {confirmGenerate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h3 className="text-sm font-semibold text-primary-900">Generate new auth key?</h3>
+            <p className="mt-2 text-sm text-neutral-500">
+              This will generate a new ECDSA key pair and register the public key on-chain.
+              You&apos;ll need to save the private key — it&apos;s shown only once.
+            </p>
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmGenerate(false)}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setConfirmGenerate(false); handleGenerate(); }}
+                className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 transition-colors"
+              >
+                Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Show generated private key — one-time reveal */}
       {generatedKey && (
@@ -983,7 +1044,7 @@ function AuthKeysSection({
                 {!isAdmin && (
                   <button
                     onClick={() => setConfirmRemove(key)}
-                    disabled={false}
+                    disabled={isBusy}
                     className="p-1 text-neutral-300 hover:text-error-500 transition-colors disabled:opacity-50"
                     title="Remove key"
                   >

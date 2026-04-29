@@ -46,6 +46,7 @@ export interface TxState {
 interface TxStatusContextValue {
   current: TxState | null;
   queueLength: number;
+  isBusy: boolean;
   submit: (label: string, params: WriteParams, onSuccess?: () => void) => void;
   dismiss: () => void;
   submitInviteCode: (code: string) => void;
@@ -95,10 +96,14 @@ export function TxStatusProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const runningRef = useRef(false);
   const onSuccessRef = useRef<(() => void) | undefined>(undefined);
+  const writeRef = useRef(write);
+  const resetRef = useRef(reset);
+  writeRef.current = write;
+  resetRef.current = reset;
 
   // Sync hook status → current tx state
   useEffect(() => {
-    if (!current) return;
+    if (!current || !runningRef.current) return;
     setCurrent((prev) =>
       prev ? { ...prev, status, txHash, error } : null,
     );
@@ -114,12 +119,11 @@ export function TxStatusProvider({ children }: { children: ReactNode }) {
       // Invalidate queries
       queryClient.invalidateQueries();
 
-      // Auto-clear after 3s, then start next
+      // Auto-clear after 3s
       const timer = setTimeout(() => {
         runningRef.current = false;
         setCurrent(null);
-        reset();
-        startNext();
+        resetRef.current();
       }, 3000);
       return () => clearTimeout(timer);
     }
@@ -145,14 +149,14 @@ export function TxStatusProvider({ children }: { children: ReactNode }) {
         txHash: null,
         error: null,
       });
-      reset();
+      resetRef.current();
       try {
-        await write(item.params);
+        await writeRef.current(item.params);
       } catch {
         // error captured in hook state, synced via useEffect
       }
     },
-    [write, reset],
+    [],
   );
 
   const submit = useCallback(
@@ -177,16 +181,17 @@ export function TxStatusProvider({ children }: { children: ReactNode }) {
     runningRef.current = false;
     onSuccessRef.current = undefined;
     setCurrent(null);
-    reset();
+    resetRef.current();
     // Start next queued item
     startNext();
-  }, [reset, startNext]);
+  }, [startNext]);
 
   return (
     <TxStatusContext.Provider
       value={{
         current,
         queueLength: queue.length,
+        isBusy: current !== null && current.status !== "success" && current.status !== "error",
         submit,
         dismiss,
         submitInviteCode,
