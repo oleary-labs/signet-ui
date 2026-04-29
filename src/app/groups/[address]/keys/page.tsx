@@ -285,7 +285,10 @@ export default function KeysTestingPage() {
           body: JSON.stringify(signReq),
         });
 
-        if (!res.ok) throw new Error(`Sign failed: ${res.status}`);
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          throw new Error(`Sign failed: ${res.status} on ${targetNodeUrls[0]} — ${body}`);
+        }
 
         const { ethereum_signature } = await res.json();
         const sigBytes = hexToBytes(ethereum_signature);
@@ -358,21 +361,41 @@ export default function KeysTestingPage() {
               </span>
             </div>
           </div>
-          {!isConnected && sessionStatus !== "connecting" && (
-            <button
-              onClick={connectToGroup}
-              disabled={targetNodeUrls.length === 0}
-              className="rounded-lg bg-accent-500 px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
-            >
-              Authorize
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {isConnected && (
+              <button
+                onClick={() => { setSessionStatus("idle"); setTargetSession(null); }}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+              >
+                Re-auth
+              </button>
+            )}
+            {!isConnected && sessionStatus !== "connecting" && (
+              <button
+                onClick={connectToGroup}
+                disabled={targetNodeUrls.length === 0}
+                className="rounded-lg bg-accent-500 px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
+              >
+                Authorize
+              </button>
+            )}
+          </div>
         </div>
         {authKeyPub && (
           <p className="mt-2 text-xs text-neutral-400">
             Auth key: <span className="font-mono text-neutral-500">{authKeyPub.slice(0, 14)}...{authKeyPub.slice(-8)}</span>
             <span className="ml-2 rounded-full bg-neutral-100 px-1.5 py-0.5 text-neutral-500">Schnorr</span>
           </p>
+        )}
+        {targetNodeUrls.length > 0 && (
+          <div className="mt-1 text-xs text-neutral-400">
+            Nodes: {targetNodeUrls.map((url, i) => (
+              <span key={url} className="font-mono text-neutral-500">
+                {i > 0 && ", "}
+                {url.replace(/^https?:\/\//, "")}
+              </span>
+            ))}
+          </div>
         )}
         {sessionError && (
           <p className="mt-2 text-xs text-error-600">{sessionError}</p>
