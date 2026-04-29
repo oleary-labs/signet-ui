@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useSignetAuth } from "@/hooks/useSignetAuth";
 import type { AuthStatus } from "@/providers/signetAuth";
+import { useTxStatus, TX_STATUS_LABELS } from "@/providers/txStatus";
+import { InviteCodeDialog } from "@/components/ui/InviteCodeDialog";
 
 const STATUS_LABELS: Partial<Record<AuthStatus, string>> = {
   oauth: "Redirecting to Google...",
@@ -21,6 +23,8 @@ export function Header() {
     status === "proving" ||
     status === "registering" ||
     status === "keygen";
+
+  const txStatus = useTxStatus();
 
   return (
     <header className="border-b border-neutral-200 bg-white">
@@ -45,6 +49,7 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-4">
+          {txStatus.current && <TxProgress />}
           {isAuthenticated ? (
             <div className="flex items-center gap-3">
               <span className="text-sm text-neutral-500">
@@ -116,6 +121,61 @@ function AuthProgress({ status }: { status: AuthStatus }) {
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+function TxProgress() {
+  const { current, queueLength, dismiss, needsInviteCode, submitInviteCode } = useTxStatus();
+  if (!current) return null;
+
+  const isSuccess = current.status === "success";
+  const isError = current.status === "error";
+  const stepLabel = TX_STATUS_LABELS[current.status] ?? "";
+
+  return (
+    <div className="flex items-center gap-3">
+      {isSuccess ? (
+        <div className="h-4 w-4 rounded-full bg-success-500 flex items-center justify-center">
+          <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+        </div>
+      ) : isError ? (
+        <div className="h-4 w-4 rounded-full bg-error-500" />
+      ) : (
+        <div className="h-4 w-4 rounded-full border-2 border-accent-500 border-t-transparent animate-spin" />
+      )}
+      <div className="flex flex-col">
+        <span className={`text-sm font-medium ${isError ? "text-error-600" : isSuccess ? "text-success-600" : "text-neutral-600"}`}>
+          {current.label}
+          {!isSuccess && !isError && (
+            <span className="text-neutral-400 ml-1">{stepLabel}</span>
+          )}
+          {isSuccess && current.txHash && (
+            <span className="text-neutral-400 ml-1 font-mono text-xs">
+              {current.txHash.slice(0, 10)}...
+            </span>
+          )}
+          {queueLength > 0 && (
+            <span className="text-neutral-400 ml-1 text-xs">+{queueLength} queued</span>
+          )}
+        </span>
+        {isError && current.error && (
+          <span className="text-xs text-error-500 max-w-xs truncate">
+            {current.error.message}
+          </span>
+        )}
+      </div>
+      {(isError || isSuccess) && (
+        <button
+          onClick={dismiss}
+          className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors"
+        >
+          Dismiss
+        </button>
+      )}
+      {needsInviteCode && <InviteCodeDialog onSubmit={submitInviteCode} />}
     </div>
   );
 }

@@ -3,17 +3,16 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { type Address, type Hex, type Abi, keccak256, toHex, encodePacked } from "viem";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useGroupDetails, useRegisteredNodes, useRemovalRequests } from "@/hooks/useFactory";
 import { useSignetAuth } from "@/hooks/useSignetAuth";
-import { useSignetWrite } from "@/hooks/useSignetWrite";
+import { useTxStatus } from "@/providers/txStatus";
 import { sessionKeyMaterial } from "@/providers/signetAuth";
 import { adminRequest, type AdminAuthConfig } from "@/lib/signet-sdk/admin";
 import { signetGroup } from "@/config/contracts";
 import { env } from "@/config/env";
 import { loadNodeRegistry, getNodeMetadata, type NodeRegistry, type NodeMetadata } from "@/lib/nodeRegistry";
 import { useNodeHealth } from "@/hooks/useNodeApi";
-import { InviteCodeDialog } from "@/components/ui/InviteCodeDialog";
 
 /**
  * Group detail / management page.
@@ -274,43 +273,26 @@ function NodesSection({
 }) {
   const [showInvite, setShowInvite] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<Address | null>(null);
-  const { write, status, error, reset, needsInviteCode, submitInviteCode } = useSignetWrite();
-  const queryClient = useQueryClient();
+  const { submit, isBusy } = useTxStatus();
 
-  const isSubmitting = status !== "idle" && status !== "success" && status !== "error";
-
-  async function handleInvite(node: Address) {
-    reset();
-    try {
-      await write({
-        address: groupAddress,
-        abi: signetGroup(groupAddress).abi as Abi,
-        functionName: "inviteNode",
-        args: [node],
-      });
-      setShowInvite(false);
-      reset();
-      queryClient.invalidateQueries();
-    } catch {
-      // error captured in hook state
-    }
+  function handleInvite(node: Address) {
+    submit("Inviting node...", {
+      address: groupAddress,
+      abi: signetGroup(groupAddress).abi as Abi,
+      functionName: "inviteNode",
+      args: [node],
+    });
+    setShowInvite(false);
   }
 
-  async function handleQueueRemoval(node: Address) {
-    reset();
-    try {
-      await write({
-        address: groupAddress,
-        abi: signetGroup(groupAddress).abi as Abi,
-        functionName: "queueRemoval",
-        args: [node],
-      });
-      setConfirmRemove(null);
-      reset();
-      queryClient.invalidateQueries();
-    } catch {
-      // error captured in hook state
-    }
+  function handleQueueRemoval(node: Address) {
+    submit("Removing node...", {
+      address: groupAddress,
+      abi: signetGroup(groupAddress).abi as Abi,
+      functionName: "queueRemoval",
+      args: [node],
+    });
+    setConfirmRemove(null);
   }
 
   // Filter out nodes that are already pending removal so they only show once
@@ -332,8 +314,9 @@ function NodesSection({
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-primary-900">Providers</h2>
         <button
-          onClick={() => { setShowInvite(true); reset(); }}
-          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+          onClick={() => { setShowInvite(true); }}
+          disabled={isBusy}
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors disabled:opacity-50"
         >
           Add Node
         </button>
@@ -360,7 +343,7 @@ function NodesSection({
                 <span className="text-xs text-success-700">Active</span>
                 <button
                   onClick={() => setConfirmRemove(node)}
-                  disabled={atThreshold}
+                  disabled={atThreshold || isBusy}
                   className="p-1 text-neutral-300 hover:text-error-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-neutral-300"
                   title={atThreshold ? "Cannot remove — would drop below threshold" : "Remove node"}
                 >
@@ -421,15 +404,13 @@ function NodesSection({
       {showInvite && (
         <InviteNodeDialog
           existingNodes={existingNodes}
-          isSubmitting={isSubmitting}
-          error={status === "error" ? error : null}
           onInvite={handleInvite}
-          onClose={() => { setShowInvite(false); reset(); }}
+          onClose={() => { setShowInvite(false); }}
           registry={registry}
         />
       )}
 
-      {needsInviteCode && <InviteCodeDialog onSubmit={submitInviteCode} />}
+      {/* invite code handled by TxStatusProvider in header */}
 
       {/* Confirm removal dialog */}
       {confirmRemove && (
@@ -445,23 +426,19 @@ function NodesSection({
                 <> The node can be removed after a {formatDuration(Number(removalDelay))} delay.</>
               )}
             </p>
-            {status === "error" && (
-              <p className="mt-2 text-xs text-error-600">{error?.message}</p>
-            )}
             <div className="mt-4 flex justify-end gap-3">
               <button
-                onClick={() => { setConfirmRemove(null); reset(); }}
-                disabled={isSubmitting}
+                onClick={() => { setConfirmRemove(null); }}
                 className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleQueueRemoval(confirmRemove)}
-                disabled={isSubmitting}
+                disabled={isBusy}
                 className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors disabled:opacity-50"
               >
-                {isSubmitting ? "Submitting..." : "Queue Removal"}
+                Queue Removal
               </button>
             </div>
           </div>
@@ -473,15 +450,11 @@ function NodesSection({
 
 function InviteNodeDialog({
   existingNodes,
-  isSubmitting,
-  error,
   onInvite,
   onClose,
   registry,
 }: {
   existingNodes: Set<string>;
-  isSubmitting: boolean;
-  error: Error | null;
   onInvite: (node: Address) => void;
   onClose: () => void;
   registry: NodeRegistry;
@@ -510,10 +483,6 @@ function InviteNodeDialog({
           Select a registered provider to invite to this group.
         </p>
 
-        {error && (
-          <p className="mb-3 text-xs text-error-600">{error.message}</p>
-        )}
-
         <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
           {isLoading ? (
             <div className="space-y-2">
@@ -535,7 +504,6 @@ function InviteNodeDialog({
                   key={addr}
                   address={addr}
                   metadata={meta}
-                  isSubmitting={isSubmitting}
                   onInvite={onInvite}
                 />
               );
@@ -550,12 +518,10 @@ function InviteNodeDialog({
 function InviteNodeRow({
   address,
   metadata,
-  isSubmitting,
   onInvite,
 }: {
   address: Address;
   metadata?: NodeMetadata;
-  isSubmitting: boolean;
   onInvite: (node: Address) => void;
 }) {
   const { data: health } = useNodeHealth(metadata?.apiUrl);
@@ -591,10 +557,9 @@ function InviteNodeRow({
       )}
       <button
         onClick={() => onInvite(address)}
-        disabled={isSubmitting}
-        className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
+        className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 transition-colors"
       >
-        {isSubmitting ? "Inviting..." : "Invite"}
+        Invite
       </button>
     </div>
   );
@@ -610,41 +575,26 @@ function PendingOperationsSection({
   registry: NodeRegistry;
 }) {
   const { data: removalData } = useRemovalRequests(groupAddress, pendingRemovals);
-  const { write, status, error, reset, needsInviteCode, submitInviteCode } = useSignetWrite();
-  const queryClient = useQueryClient();
+  const { submit, isBusy } = useTxStatus();
+  const [confirmExecute, setConfirmExecute] = useState<Address | null>(null);
 
-  const isSubmitting = status !== "idle" && status !== "success" && status !== "error";
-
-  async function handleExecuteRemoval(node: Address) {
-    reset();
-    try {
-      await write({
-        address: groupAddress,
-        abi: signetGroup(groupAddress).abi as Abi,
-        functionName: "executeRemoval",
-        args: [node],
-      });
-      reset();
-      queryClient.invalidateQueries();
-    } catch {
-      // error captured in hook state
-    }
+  function handleExecuteRemoval(node: Address) {
+    setConfirmExecute(null);
+    submit("Executing removal...", {
+      address: groupAddress,
+      abi: signetGroup(groupAddress).abi as Abi,
+      functionName: "executeRemoval",
+      args: [node],
+    });
   }
 
-  async function handleCancelRemoval(node: Address) {
-    reset();
-    try {
-      await write({
-        address: groupAddress,
-        abi: signetGroup(groupAddress).abi as Abi,
-        functionName: "cancelRemoval",
-        args: [node],
-      });
-      reset();
-      queryClient.invalidateQueries();
-    } catch {
-      // error captured in hook state
-    }
+  function handleCancelRemoval(node: Address) {
+    submit("Cancelling removal...", {
+      address: groupAddress,
+      abi: signetGroup(groupAddress).abi as Abi,
+      functionName: "cancelRemoval",
+      args: [node],
+    });
   }
 
   const hasOperations = pendingRemovals.length > 0;
@@ -654,10 +604,6 @@ function PendingOperationsSection({
       <h2 className="text-lg font-semibold text-primary-900 mb-4">
         Pending Operations
       </h2>
-
-      {status === "error" && (
-        <p className="mb-3 text-xs text-error-600">{error?.message}</p>
-      )}
 
       {!hasOperations ? (
         <p className="text-sm text-neutral-500">No pending operations.</p>
@@ -696,14 +642,14 @@ function PendingOperationsSection({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleCancelRemoval(node)}
-                    disabled={isSubmitting}
+                    disabled={isBusy}
                     className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={() => handleExecuteRemoval(node)}
-                    disabled={isSubmitting || !canExecute}
+                    onClick={() => setConfirmExecute(node)}
+                    disabled={!canExecute || isBusy}
                     className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors disabled:opacity-50"
                   >
                     Execute
@@ -715,7 +661,35 @@ function PendingOperationsSection({
         </div>
       )}
 
-      {needsInviteCode && <InviteCodeDialog onSubmit={submitInviteCode} />}
+      {/* Confirm execute removal dialog */}
+      {confirmExecute && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h3 className="text-sm font-semibold text-primary-900">Execute node removal?</h3>
+            <p className="mt-2 text-sm text-neutral-500">
+              This will permanently remove{" "}
+              <span className="font-medium text-primary-800">
+                {getNodeMetadata(registry, confirmExecute)?.name ?? `${confirmExecute.slice(0, 10)}...`}
+              </span>{" "}
+              from the group. This action cannot be undone.
+            </p>
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmExecute(null)}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleExecuteRemoval(confirmExecute)}
+                className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors"
+              >
+                Execute Removal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -743,50 +717,32 @@ function AddIssuerSection({
   const [showForm, setShowForm] = useState(false);
   const [issuerUrl, setIssuerUrl] = useState("");
   const [clientIds, setClientIds] = useState("");
-  const [removingIssuer, setRemovingIssuer] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const { write, status, error, reset, needsInviteCode, submitInviteCode } = useSignetWrite();
-  const queryClient = useQueryClient();
+  const { submit, isBusy } = useTxStatus();
 
-  const isSubmitting = status !== "idle" && status !== "success" && status !== "error";
-
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const ids = clientIds.split(",").map((s) => s.trim()).filter(Boolean);
-    try {
-      await write({
-        address: groupAddress,
-        abi: signetGroup(groupAddress).abi as Abi,
-        functionName: "addIssuer",
-        args: [issuerUrl, ids],
-      });
-      setIssuerUrl("");
-      setClientIds("");
-      setShowForm(false);
-      reset();
-      queryClient.invalidateQueries();
-    } catch {
-      // error captured in hook state
-    }
+    submit("Adding issuer...", {
+      address: groupAddress,
+      abi: signetGroup(groupAddress).abi as Abi,
+      functionName: "addIssuer",
+      args: [issuerUrl, ids],
+    });
+    setIssuerUrl("");
+    setClientIds("");
+    setShowForm(false);
   }
 
-  async function handleRemove(issuer: string) {
-    setRemovingIssuer(issuer);
-    reset();
+  function handleRemove(issuer: string) {
     const issuerHash = keccak256(encodePacked(["string"], [issuer]));
-    try {
-      await write({
-        address: groupAddress,
-        abi: signetGroup(groupAddress).abi as Abi,
-        functionName: "removeIssuer",
-        args: [issuerHash],
-      });
-      setRemovingIssuer(null);
-      reset();
-      queryClient.invalidateQueries();
-    } catch {
-      setRemovingIssuer(null);
-    }
+    submit("Removing issuer...", {
+      address: groupAddress,
+      abi: signetGroup(groupAddress).abi as Abi,
+      functionName: "removeIssuer",
+      args: [issuerHash],
+    });
+    setConfirmRemove(null);
   }
 
   return (
@@ -804,8 +760,9 @@ function AddIssuerSection({
           </p>
         </div>
         <button
-          onClick={() => { setShowForm(!showForm); reset(); }}
-          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+          onClick={() => { setShowForm(!showForm); }}
+          disabled={isBusy}
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors disabled:opacity-50"
         >
           {showForm ? "Cancel" : "Add Issuer"}
         </button>
@@ -839,15 +796,12 @@ function AddIssuerSection({
             />
             <p className="mt-1 text-xs text-neutral-400">Comma-separated. Leave empty for any client ID.</p>
           </div>
-          {status === "error" && (
-            <p className="text-xs text-error-600">{error?.message}</p>
-          )}
           <button
             type="submit"
-            disabled={isSubmitting || !issuerUrl}
+            disabled={!issuerUrl}
             className="rounded-lg bg-accent-500 px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
           >
-            {isSubmitting ? "Submitting..." : "Add Issuer"}
+            Add Issuer
           </button>
         </form>
       )}
@@ -878,7 +832,7 @@ function AddIssuerSection({
               </div>
               <button
                 onClick={() => setConfirmRemove(iss.issuer)}
-                disabled={isSubmitting}
+                disabled={isBusy}
                 className="p-1 text-neutral-300 hover:text-error-500 transition-colors disabled:opacity-50"
                 title="Remove issuer"
               >
@@ -899,7 +853,7 @@ function AddIssuerSection({
         )
       )}
 
-      {needsInviteCode && <InviteCodeDialog onSubmit={submitInviteCode} />}
+      {/* invite code handled by TxStatusProvider in header */}
 
       {/* Confirm remove modal */}
       {confirmRemove && (
@@ -910,25 +864,18 @@ function AddIssuerSection({
               This will remove <span className="font-medium text-primary-800">{confirmRemove}</span> and
               all its client IDs. Users authenticating via this issuer will no longer be able to access this group.
             </p>
-            {status === "error" && removingIssuer && (
-              <p className="mt-2 text-xs text-error-600">{error?.message}</p>
-            )}
             <div className="mt-4 flex justify-end gap-3">
               <button
-                onClick={() => { setConfirmRemove(null); reset(); }}
-                disabled={isSubmitting}
+                onClick={() => setConfirmRemove(null)}
                 className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  handleRemove(confirmRemove).then(() => setConfirmRemove(null));
-                }}
-                disabled={isSubmitting}
-                className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors disabled:opacity-50"
+                onClick={() => handleRemove(confirmRemove)}
+                className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors"
               >
-                {removingIssuer === confirmRemove ? "Removing..." : "Remove"}
+                Remove
               </button>
             </div>
           </div>
@@ -949,15 +896,11 @@ function AuthKeysSection({
 }) {
   const [generatedKey, setGeneratedKey] = useState<{ privateKey: string; publicKey: string } | null>(null);
   const [copied, setCopied] = useState(false);
-  const [removingKey, setRemovingKey] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const { write, status, error, reset, needsInviteCode, submitInviteCode } = useSignetWrite();
-  const queryClient = useQueryClient();
-
-  const isSubmitting = status !== "idle" && status !== "success" && status !== "error";
+  const [confirmGenerate, setConfirmGenerate] = useState(false);
+  const { submit, isBusy } = useTxStatus();
 
   async function handleGenerate() {
-    reset();
     const { utils, getPublicKey } = await import("@noble/secp256k1");
     const privateKey = utils.randomSecretKey();
     const publicKey = getPublicKey(privateKey, true); // 33-byte compressed
@@ -968,39 +911,26 @@ function AuthKeysSection({
     // ECDSA prefix 0x00 + compressed public key
     const prefixedPub = `0x00${pubHex}` as Hex;
 
-    try {
-      await write({
-        address: groupAddress,
-        abi: signetGroup(groupAddress).abi as Abi,
-        functionName: "addAuthKey",
-        args: [prefixedPub],
-      });
+    submit("Adding auth key...", {
+      address: groupAddress,
+      abi: signetGroup(groupAddress).abi as Abi,
+      functionName: "addAuthKey",
+      args: [prefixedPub],
+    }, () => {
+      // onSuccess: show the private key reveal
       setGeneratedKey({ privateKey: privHex, publicKey: pubHex });
-      reset();
-      queryClient.invalidateQueries();
-    } catch {
-      // error captured in hook state
-    }
+    });
   }
 
-  async function handleRemove(key: string) {
-    setRemovingKey(key);
-    reset();
+  function handleRemove(key: string) {
     const keyHash = keccak256(key as Hex);
-    try {
-      await write({
-        address: groupAddress,
-        abi: signetGroup(groupAddress).abi as Abi,
-        functionName: "removeAuthKey",
-        args: [keyHash],
-      });
-      setRemovingKey(null);
-      setConfirmRemove(null);
-      reset();
-      queryClient.invalidateQueries();
-    } catch {
-      setRemovingKey(null);
-    }
+    submit("Removing auth key...", {
+      address: groupAddress,
+      abi: signetGroup(groupAddress).abi as Abi,
+      functionName: "removeAuthKey",
+      args: [keyHash],
+    });
+    setConfirmRemove(null);
   }
 
   function copyPrivateKey() {
@@ -1025,16 +955,39 @@ function AuthKeysSection({
           </p>
         </div>
         <button
-          onClick={handleGenerate}
-          disabled={isSubmitting}
+          onClick={() => setConfirmGenerate(true)}
+          disabled={isBusy}
           className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors disabled:opacity-50"
         >
-          {isSubmitting && !removingKey ? "Generating..." : "Generate Key"}
+          Generate Key
         </button>
       </div>
 
-      {status === "error" && !removingKey && (
-        <p className="mb-3 text-xs text-error-600">{error?.message}</p>
+      {/* Confirm generate dialog */}
+      {confirmGenerate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h3 className="text-sm font-semibold text-primary-900">Generate new auth key?</h3>
+            <p className="mt-2 text-sm text-neutral-500">
+              This will generate a new ECDSA key pair and register the public key on-chain.
+              You&apos;ll need to save the private key — it&apos;s shown only once.
+            </p>
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmGenerate(false)}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setConfirmGenerate(false); handleGenerate(); }}
+                className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 transition-colors"
+              >
+                Generate
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Show generated private key — one-time reveal */}
@@ -1091,7 +1044,7 @@ function AuthKeysSection({
                 {!isAdmin && (
                   <button
                     onClick={() => setConfirmRemove(key)}
-                    disabled={isSubmitting}
+                    disabled={isBusy}
                     className="p-1 text-neutral-300 hover:text-error-500 transition-colors disabled:opacity-50"
                     title="Remove key"
                   >
@@ -1112,7 +1065,7 @@ function AuthKeysSection({
         </div>
       )}
 
-      {needsInviteCode && <InviteCodeDialog onSubmit={submitInviteCode} />}
+      {/* invite code handled by TxStatusProvider in header */}
 
       {/* Confirm remove modal */}
       {confirmRemove && (
@@ -1124,23 +1077,18 @@ function AuthKeysSection({
               The key <span className="font-mono text-xs">{confirmRemove.slice(4, 12)}...{confirmRemove.slice(-8)}</span> will
               no longer be able to authenticate with this group.
             </p>
-            {status === "error" && removingKey && (
-              <p className="mt-2 text-xs text-error-600">{error?.message}</p>
-            )}
             <div className="mt-4 flex justify-end gap-3">
               <button
-                onClick={() => { setConfirmRemove(null); reset(); }}
-                disabled={isSubmitting}
+                onClick={() => setConfirmRemove(null)}
                 className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:border-neutral-400 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleRemove(confirmRemove)}
-                disabled={isSubmitting}
-                className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors disabled:opacity-50"
+                className="rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-error-600 transition-colors"
               >
-                {removingKey === confirmRemove ? "Removing..." : "Remove"}
+                Remove
               </button>
             </div>
           </div>
