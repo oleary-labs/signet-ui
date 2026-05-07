@@ -57,7 +57,7 @@ export async function requestDelegation(
   nodeUrl: string,
   proxyEndpoint: string,
   groupId: string,
-  keyId: string,
+  keySuffix: string,
   parentKeyId: string,
   curve: string,
   expiresIn: number,
@@ -65,12 +65,14 @@ export async function requestDelegation(
   claims: IdTokenClaims,
   identity?: string,
 ): Promise<DelegationResult> {
-  // Build session-authenticated request (no message hash for delegation)
+  // Build session-authenticated request with the sub-key's suffix.
+  // The node resolves the full sub-key ID from session identity + suffix,
+  // and derives the parent key ID by stripping the suffix.
   const signReq = await signKeygenRequest(
     sessionKeypair,
     claims,
     groupId,
-    undefined, // no key suffix — node resolves from session identity
+    keySuffix,
     identity,
   );
 
@@ -83,7 +85,7 @@ export async function requestDelegation(
     },
     body: JSON.stringify({
       group_id: groupId.toLowerCase(),
-      key_id: keyId,
+      key_suffix: keySuffix,
       parent_key_id: parentKeyId,
       curve,
       expires_in: expiresIn,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { SignInButton, SignOutButton, useUser, useAuth } from "@clerk/nextjs";
 import { generateSessionKeypair } from "@/lib/signet-sdk/session";
 import { generateJWTProof, getJWTModulusBytes } from "@/lib/signet-sdk/proof";
@@ -37,6 +37,7 @@ export default function X402DemoPage() {
   const [claims, setClaims] = useState<IdTokenClaims | null>(null);
   const [sessionStatus, setSessionStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const sessionExpiryRef = useRef<number>(0); // unix seconds when session expires
 
   // Parent key
   const [parentKeyId, setParentKeyId] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export default function X402DemoPage() {
   // Sub-key
   const [selectedPreset, setSelectedPreset] = useState(0);
   const [subKeyId, setSubKeyId] = useState<string | null>(null);
+  const [subKeySuffix, setSubKeySuffix] = useState<string | null>(null);
   const [subKeyAddress, setSubKeyAddress] = useState<string | null>(null);
   const [subKeyScope, setSubKeyScope] = useState<string | null>(null);
   const [subKeyStatus, setSubKeyStatus] = useState<"idle" | "creating" | "done" | "error">("idle");
@@ -68,6 +70,12 @@ export default function X402DemoPage() {
    * Returns the keypair and claims for immediate use.
    */
   const ensureSession = useCallback(async (): Promise<{ keypair: SessionKeypair; claims: IdTokenClaims }> => {
+    // Reuse existing session if still valid (with 10s safety margin)
+    const now = Math.floor(Date.now() / 1000);
+    if (sessionKeypair && claims && sessionExpiryRef.current > now + 10) {
+      return { keypair: sessionKeypair, claims };
+    }
+
     const jwt = await getToken();
     if (!jwt) throw new Error("No Clerk token available");
 
@@ -100,8 +108,10 @@ export default function X402DemoPage() {
     );
 
     setClaims(decoded);
+    sessionExpiryRef.current = decoded.exp;
+    setSessionStatus("connected");
     return { keypair, claims: decoded };
-  }, [getToken, sessionKeypair]);
+  }, [getToken, sessionKeypair, claims]);
 
   const establishSession = useCallback(async () => {
     setSessionStatus("connecting");
@@ -132,6 +142,8 @@ export default function X402DemoPage() {
         keypair,
         freshClaims,
         undefined, // no suffix = parent key
+        undefined, // no identity override
+        "ecdsa_secp256k1",
       );
       setParentKeyId(result.keyId);
       setParentAddress(result.ethereumAddress);
@@ -170,8 +182,12 @@ export default function X402DemoPage() {
         keypair,
         freshClaims,
         suffix,
+        undefined, // no identity override
+        "ecdsa_secp256k1",
+        scope,
       );
       setSubKeyId(result.keyId);
+      setSubKeySuffix(suffix);
       setSubKeyAddress(result.ethereumAddress);
       setSubKeyStatus("done");
     } catch (e) {
@@ -185,19 +201,18 @@ export default function X402DemoPage() {
   // ---------------------------------------------------------------------------
 
   const mintDelegation = useCallback(async () => {
-    if (!subKeyId || !parentKeyId) return;
+    if (!subKeySuffix || !parentKeyId) return;
     setDelegateStatus("minting");
     setError(null);
 
     try {
-      console.log("[x402] delegate: parentKeyId=" + parentKeyId + " subKeyId=" + subKeyId);
       const { keypair, claims: freshClaims } = await ensureSession();
       const result = await requestDelegation(
         DEMO_NODES[0],
         PROXY,
         DEMO_GROUP,
-        subKeyId,
-        parentKeyId,
+        subKeySuffix!,
+        parentKeyId!,
         "ecdsa_secp256k1",
         delegationExpiry,
         keypair,
@@ -209,7 +224,7 @@ export default function X402DemoPage() {
       setError(e instanceof Error ? e.message : String(e));
       setDelegateStatus("error");
     }
-  }, [ensureSession, subKeyId, parentKeyId, delegationExpiry]);
+  }, [ensureSession, subKeySuffix, parentKeyId, delegationExpiry]);
 
   // ---------------------------------------------------------------------------
   // Render

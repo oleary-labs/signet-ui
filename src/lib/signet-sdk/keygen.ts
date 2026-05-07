@@ -33,6 +33,8 @@ export async function keygen(
   claims: IdTokenClaims,
   keySuffix?: string,
   identity?: string,
+  curve?: string,
+  scope?: string,
 ): Promise<KeygenResult> {
   const req = await signKeygenRequest(keypair, claims, config.groupId, keySuffix, identity);
 
@@ -50,10 +52,15 @@ export async function keygen(
     headers["x-node-path"] = "/v1/keygen";
   }
 
+  // Add optional curve and scope to the request body
+  const body: Record<string, unknown> = { ...req };
+  if (curve) body.curve = curve;
+  if (scope) body.scope = scope;
+
   const res = await fetch(url, {
     method: "POST",
     headers,
-    body: JSON.stringify(req),
+    body: JSON.stringify(body),
   });
 
   if (res.status === 409) {
