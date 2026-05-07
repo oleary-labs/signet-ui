@@ -13,8 +13,8 @@ import Link from "next/link";
 // Config
 // ---------------------------------------------------------------------------
 
-const DEMO_GROUP = env.bootstrapGroup;
-const DEMO_NODES = env.bootstrapNodes;
+const DEMO_GROUP = process.env.NEXT_PUBLIC_X402_GROUP ?? env.bootstrapGroup;
+const DEMO_NODES = (process.env.NEXT_PUBLIC_X402_NODES ?? env.bootstrapNodes.join(",")).split(",").filter(Boolean);
 const PROXY = "/api/node/proxy";
 
 // ---------------------------------------------------------------------------

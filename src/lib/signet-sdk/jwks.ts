@@ -1,42 +1,62 @@
 /**
- * Google JWKS (JSON Web Key Set) fetcher.
+ * JWKS (JSON Web Key Set) fetcher.
  *
- * Fetches Google's public RSA keys and extracts the modulus
- * needed for the ZK proof witness.
+ * Fetches RSA public keys from any OIDC-compliant issuer and extracts
+ * the modulus needed for the ZK proof witness. Supports Google, Clerk,
+ * and any issuer with a standard JWKS endpoint.
  */
 
 import type { JWKSKey } from "./types";
 
 const GOOGLE_JWKS_URI = "https://www.googleapis.com/oauth2/v3/certs";
 
-let cachedKeys: JWKSKey[] | null = null;
-let cacheExpiry = 0;
+// Cache per issuer URI
+const cache = new Map<string, { keys: JWKSKey[]; expiry: number }>();
 const CACHE_TTL = 3600_000; // 1 hour
 
 /**
- * Fetch Google's current JWKS keys.
+ * Derive the JWKS URI from a JWT issuer.
+ * Google uses a non-standard path; all other OIDC issuers use /.well-known/jwks.json.
  */
-export async function fetchGoogleJWKS(): Promise<JWKSKey[]> {
-  if (cachedKeys && Date.now() < cacheExpiry) {
-    return cachedKeys;
+function jwksUriForIssuer(issuer: string): string {
+  if (issuer === "https://accounts.google.com") {
+    return GOOGLE_JWKS_URI;
   }
-
-  const res = await fetch(GOOGLE_JWKS_URI);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch JWKS: ${res.status}`);
-  }
-
-  const data = await res.json();
-  cachedKeys = data.keys as JWKSKey[];
-  cacheExpiry = Date.now() + CACHE_TTL;
-  return cachedKeys;
+  // Standard OIDC convention
+  const base = issuer.endsWith("/") ? issuer.slice(0, -1) : issuer;
+  return `${base}/.well-known/jwks.json`;
 }
 
 /**
- * Find the RSA key matching a JWT's kid.
+ * Fetch JWKS keys for an issuer.
  */
-export async function getJWKSKeyForKid(kid: string): Promise<JWKSKey> {
-  const keys = await fetchGoogleJWKS();
+export async function fetchJWKS(issuer?: string): Promise<JWKSKey[]> {
+  const uri = jwksUriForIssuer(issuer ?? "https://accounts.google.com");
+  const cached = cache.get(uri);
+  if (cached && Date.now() < cached.expiry) {
+    return cached.keys;
+  }
+
+  const res = await fetch(uri);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch JWKS from ${uri}: ${res.status}`);
+  }
+
+  const data = await res.json();
+  const keys = data.keys as JWKSKey[];
+  cache.set(uri, { keys, expiry: Date.now() + CACHE_TTL });
+  return keys;
+}
+
+/** @deprecated Use fetchJWKS() instead */
+export const fetchGoogleJWKS = () => fetchJWKS("https://accounts.google.com");
+
+/**
+ * Find the RSA key matching a JWT's kid.
+ * If issuer is provided, fetches from that issuer's JWKS endpoint.
+ */
+export async function getJWKSKeyForKid(kid: string, issuer?: string): Promise<JWKSKey> {
+  const keys = await fetchJWKS(issuer);
   const key = keys.find((k) => k.kid === kid);
   if (!key) {
     throw new Error(`No JWKS key found for kid: ${kid}`);

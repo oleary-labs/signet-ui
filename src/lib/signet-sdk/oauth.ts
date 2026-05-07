@@ -137,7 +137,14 @@ export async function handleOAuthCallback(
 export function decodeIdToken(jwt: string): IdTokenClaims {
   const payload = jwt.split(".")[1];
   const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-  return JSON.parse(decoded);
+  const claims = JSON.parse(decoded);
+  // Preserve original aud/azp presence for ZK proof public input matching.
+  // If the JWT doesn't have aud or azp, keep them empty so the prover
+  // and verifier agree on the same (empty) public inputs.
+  if (claims.aud === undefined) claims.aud = "";
+  if (claims.azp === undefined) claims.azp = "";
+  if (claims.email === undefined) claims.email = "";
+  return claims;
 }
 
 /**

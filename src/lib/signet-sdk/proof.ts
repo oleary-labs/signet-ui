@@ -47,8 +47,8 @@ export async function generateJWTProof(
   );
   const claims = decodeIdToken(jwt);
 
-  // 2. Fetch the RSA key from Google's JWKS
-  const jwksKey = await getJWKSKeyForKid(header.kid);
+  // 2. Fetch the RSA key from the issuer's JWKS
+  const jwksKey = await getJWKSKeyForKid(header.kid, claims.iss);
   const jsonWebKey: JsonWebKey = {
     kty: jwksKey.kty,
     n: jwksKey.n,
@@ -91,6 +91,9 @@ export async function getJWTModulusBytes(jwt: string): Promise<Uint8Array> {
   const header = JSON.parse(
     atob(parts[0].replace(/-/g, "+").replace(/_/g, "/"))
   );
-  const jwksKey = await getJWKSKeyForKid(header.kid);
+  const claims = JSON.parse(
+    atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))
+  );
+  const jwksKey = await getJWKSKeyForKid(header.kid, claims.iss);
   return decodeModulusBytes(jwksKey.n);
 }

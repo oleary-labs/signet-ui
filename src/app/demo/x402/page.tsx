@@ -18,9 +18,10 @@ import Link from "next/link";
 // Config
 // ---------------------------------------------------------------------------
 
-// Target group for the demo — should have Clerk's issuer registered
-const DEMO_GROUP = env.bootstrapGroup;
-const DEMO_NODES = env.bootstrapNodes;
+// Target group for the demo — must have Clerk's issuer registered
+// TODO: make this configurable via env var
+const DEMO_GROUP = process.env.NEXT_PUBLIC_X402_GROUP ?? env.bootstrapGroup;
+const DEMO_NODES = (process.env.NEXT_PUBLIC_X402_NODES ?? env.bootstrapNodes.join(",")).split(",").filter(Boolean);
 const PROXY = "/api/node/proxy";
 
 // ---------------------------------------------------------------------------
@@ -69,6 +70,13 @@ export default function X402DemoPage() {
       // Get Clerk's JWT token
       const jwt = await getToken();
       if (!jwt) throw new Error("No Clerk token available");
+      console.log("[x402] Clerk JWT:", jwt);
+      // Decode and log claims for debugging
+      const parts = jwt.split(".");
+      const header = JSON.parse(atob(parts[0]));
+      const payload = JSON.parse(atob(parts[1]));
+      console.log("[x402] JWT header:", header);
+      console.log("[x402] JWT claims:", payload);
 
       const decoded = decodeIdToken(jwt);
       setClaims(decoded);
@@ -110,7 +118,8 @@ export default function X402DemoPage() {
 
       setSessionStatus("connected");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? `${e.message}\n${e.stack}` : String(e);
+      console.error("[x402] session error:", e);
       setSessionError(msg);
       setSessionStatus("error");
     }
@@ -243,7 +252,7 @@ export default function X402DemoPage() {
                 <p className="text-xs text-neutral-400">Session established with {DEMO_NODES.length} nodes</p>
               </div>
             </div>
-            <SignOutButton>
+            <SignOutButton redirectUrl="/demo/x402">
               <button className="text-xs text-neutral-400 hover:text-neutral-600">Sign Out</button>
             </SignOutButton>
           </div>
@@ -253,13 +262,18 @@ export default function X402DemoPage() {
               <p className="text-sm text-primary-900">{user?.primaryEmailAddress?.emailAddress}</p>
               <p className="text-xs text-neutral-400">Signed in via Clerk. Connect to Signet to continue.</p>
             </div>
-            <button
-              onClick={establishSession}
-              disabled={sessionStatus === "connecting"}
-              className="rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
-            >
-              {sessionStatus === "connecting" ? "Connecting..." : "Connect to Signet"}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={establishSession}
+                disabled={sessionStatus === "connecting"}
+                className="rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
+              >
+                {sessionStatus === "connecting" ? "Connecting..." : "Connect to Signet"}
+              </button>
+              <SignOutButton>
+                <button className="text-xs text-neutral-400 hover:text-neutral-600">Sign Out</button>
+              </SignOutButton>
+            </div>
           </div>
         )}
         {sessionError && <p className="mt-2 text-xs text-error-600">{sessionError}</p>}
