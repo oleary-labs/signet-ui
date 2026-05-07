@@ -62,83 +62,75 @@ export default function X402DemoPage() {
   // Establish Signet session from Clerk JWT
   // ---------------------------------------------------------------------------
 
+  /**
+   * Re-authenticate with group nodes using a fresh Clerk JWT.
+   * Reuses the existing session keypair if available, otherwise generates one.
+   * Returns the keypair and claims for immediate use.
+   */
+  const ensureSession = useCallback(async (): Promise<{ keypair: SessionKeypair; claims: IdTokenClaims }> => {
+    const jwt = await getToken();
+    if (!jwt) throw new Error("No Clerk token available");
+
+    const decoded = decodeIdToken(jwt);
+
+    // Reuse existing keypair or generate a new one
+    let keypair = sessionKeypair;
+    if (!keypair) {
+      keypair = await generateSessionKeypair();
+      setSessionKeypair(keypair);
+    }
+
+    // Generate ZK proof and authenticate
+    let proof: Uint8Array;
+    let modulusBytes: Uint8Array;
+
+    if (env.useServerProver) {
+      const result = await generateServerProof("/api/bundler", jwt, keypair.publicKeyHex);
+      proof = result.proof;
+      modulusBytes = result.jwksModulus;
+    } else {
+      const clientResult = await generateJWTProof(jwt, keypair.publicKeyHex);
+      proof = clientResult.proof;
+      modulusBytes = await getJWTModulusBytes(jwt);
+    }
+
+    await authenticateWithBootstrap(
+      { groupId: DEMO_GROUP, nodeUrls: DEMO_NODES, proxyEndpoint: PROXY },
+      proof, keypair.publicKeyHex, decoded, modulusBytes,
+    );
+
+    setClaims(decoded);
+    return { keypair, claims: decoded };
+  }, [getToken, sessionKeypair]);
+
   const establishSession = useCallback(async () => {
     setSessionStatus("connecting");
     setSessionError(null);
-
     try {
-      // Get Clerk's JWT token
-      const jwt = await getToken();
-      if (!jwt) throw new Error("No Clerk token available");
-      console.log("[x402] Clerk JWT:", jwt);
-      // Decode and log claims for debugging
-      const parts = jwt.split(".");
-      const header = JSON.parse(atob(parts[0]));
-      const payload = JSON.parse(atob(parts[1]));
-      console.log("[x402] JWT header:", header);
-      console.log("[x402] JWT claims:", payload);
-
-      const decoded = decodeIdToken(jwt);
-      setClaims(decoded);
-
-      // Generate session keypair
-      const keypair = await generateSessionKeypair();
-      setSessionKeypair(keypair);
-
-      // Generate ZK proof of the Clerk JWT
-      let proof: Uint8Array;
-      let modulusBytes: Uint8Array;
-
-      if (env.useServerProver) {
-        const result = await generateServerProof(
-          "/api/bundler",
-          jwt,
-          keypair.publicKeyHex,
-        );
-        proof = result.proof;
-        modulusBytes = result.jwksModulus;
-      } else {
-        const clientResult = await generateJWTProof(jwt, keypair.publicKeyHex);
-        proof = clientResult.proof;
-        modulusBytes = await getJWTModulusBytes(jwt);
-      }
-
-      // Authenticate with all group nodes
-      await authenticateWithBootstrap(
-        {
-          groupId: DEMO_GROUP,
-          nodeUrls: DEMO_NODES,
-          proxyEndpoint: PROXY,
-        },
-        proof,
-        keypair.publicKeyHex,
-        decoded,
-        modulusBytes,
-      );
-
+      await ensureSession();
       setSessionStatus("connected");
     } catch (e) {
-      const msg = e instanceof Error ? `${e.message}\n${e.stack}` : String(e);
+      const msg = e instanceof Error ? e.message : String(e);
       console.error("[x402] session error:", e);
       setSessionError(msg);
       setSessionStatus("error");
     }
-  }, [getToken]);
+  }, [ensureSession]);
 
   // ---------------------------------------------------------------------------
   // Create parent key (ECDSA, unscoped)
   // ---------------------------------------------------------------------------
 
   const createParentKey = useCallback(async () => {
-    if (!sessionKeypair || !claims) return;
     setParentStatus("creating");
     setError(null);
 
     try {
+      const { keypair, claims: freshClaims } = await ensureSession();
       const result = await keygen(
         { nodeUrls: DEMO_NODES, groupId: DEMO_GROUP, proxyEndpoint: PROXY },
-        sessionKeypair,
-        claims,
+        keypair,
+        freshClaims,
         undefined, // no suffix = parent key
       );
       setParentKeyId(result.keyId);
@@ -148,18 +140,18 @@ export default function X402DemoPage() {
       setError(e instanceof Error ? e.message : String(e));
       setParentStatus("error");
     }
-  }, [sessionKeypair, claims]);
+  }, [ensureSession]);
 
   // ---------------------------------------------------------------------------
   // Create scoped sub-key (ECDSA, EIP-712 domain)
   // ---------------------------------------------------------------------------
 
   const createSubKey = useCallback(async () => {
-    if (!sessionKeypair || !claims) return;
     setSubKeyStatus("creating");
     setError(null);
 
     try {
+      const { keypair, claims: freshClaims } = await ensureSession();
       const preset = CHAIN_PRESETS[selectedPreset];
       const scope = buildEIP712Scope(preset.chainId, preset.verifyingContract);
       setSubKeyScope(scope);
@@ -175,8 +167,8 @@ export default function X402DemoPage() {
 
       const result = await keygen(
         { nodeUrls: DEMO_NODES, groupId: DEMO_GROUP, proxyEndpoint: PROXY },
-        sessionKeypair,
-        claims,
+        keypair,
+        freshClaims,
         suffix,
       );
       setSubKeyId(result.keyId);
@@ -186,18 +178,20 @@ export default function X402DemoPage() {
       setError(e instanceof Error ? e.message : String(e));
       setSubKeyStatus("error");
     }
-  }, [sessionKeypair, claims, selectedPreset]);
+  }, [ensureSession, selectedPreset]);
 
   // ---------------------------------------------------------------------------
   // Mint delegation token
   // ---------------------------------------------------------------------------
 
   const mintDelegation = useCallback(async () => {
-    if (!sessionKeypair || !claims || !subKeyId || !parentKeyId) return;
+    if (!subKeyId || !parentKeyId) return;
     setDelegateStatus("minting");
     setError(null);
 
     try {
+      console.log("[x402] delegate: parentKeyId=" + parentKeyId + " subKeyId=" + subKeyId);
+      const { keypair, claims: freshClaims } = await ensureSession();
       const result = await requestDelegation(
         DEMO_NODES[0],
         PROXY,
@@ -206,8 +200,8 @@ export default function X402DemoPage() {
         parentKeyId,
         "ecdsa_secp256k1",
         delegationExpiry,
-        sessionKeypair,
-        claims,
+        keypair,
+        freshClaims,
       );
       setDelegationToken(result.token);
       setDelegateStatus("done");
@@ -215,7 +209,7 @@ export default function X402DemoPage() {
       setError(e instanceof Error ? e.message : String(e));
       setDelegateStatus("error");
     }
-  }, [sessionKeypair, claims, subKeyId, parentKeyId, delegationExpiry]);
+  }, [ensureSession, subKeyId, parentKeyId, delegationExpiry]);
 
   // ---------------------------------------------------------------------------
   // Render

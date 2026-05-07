@@ -13,7 +13,7 @@
  */
 
 import type { SessionKeypair, IdTokenClaims } from "./types";
-import { signSignRequest } from "./request";
+import { signKeygenRequest } from "./request";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,13 +65,12 @@ export async function requestDelegation(
   claims: IdTokenClaims,
   identity?: string,
 ): Promise<DelegationResult> {
-  // Build session-authenticated request
-  const signReq = await signSignRequest(
+  // Build session-authenticated request (no message hash for delegation)
+  const signReq = await signKeygenRequest(
     sessionKeypair,
     claims,
     groupId,
-    new Uint8Array(0), // no message hash for delegation
-    undefined,         // no key suffix
+    undefined, // no key suffix — node resolves from session identity
     identity,
   );
 
