@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { hashTypedData, recoverAddress, type Hex } from "viem";
 import { generateSessionKeypair } from "@/lib/signet-sdk/session";
 import { authenticateWithDelegation } from "@/lib/signet-sdk/delegate";
 import { signTypedData, CHAIN_PRESETS, type EIP712TypedData } from "@/lib/signet-sdk/scopedSign";
@@ -54,6 +55,7 @@ function AgentSimulatorPage() {
   const [signature, setSignature] = useState<string | null>(null);
   const [ecdsaSignature, setEcdsaSignature] = useState<string | null>(null);
   const [signError, setSignError] = useState<string | null>(null);
+  const [recoveredAddress, setRecoveredAddress] = useState<string | null>(null);
 
   // x402 API query
   const [queryAddress, setQueryAddress] = useState("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"); // vitalik.eth
@@ -169,6 +171,38 @@ function AgentSimulatorPage() {
 
       setSignature(result.signature);
       setEcdsaSignature(result.ecdsaSignature);
+
+      // Client-side ecrecover verification
+      // Node returns 64-byte sig (r || s) without v. Try both v=27 and v=28.
+      try {
+        const hash = hashTypedData({
+          domain: typedData.domain as Parameters<typeof hashTypedData>[0]["domain"],
+          types: typedData.types,
+          primaryType: typedData.primaryType,
+          message: typedData.message,
+        });
+        const sig64 = result.ecdsaSignature;
+        let recovered: string | null = null;
+        for (const v of ["1b", "1c"]) { // 0x1b = 27, 0x1c = 28
+          try {
+            const sigWithV = `${sig64}${v}` as Hex;
+            const addr = await recoverAddress({ hash, signature: sigWithV });
+            if (signerAddress && addr.toLowerCase() === signerAddress.toLowerCase()) {
+              recovered = addr;
+              break;
+            }
+            // If no signerAddress to match, take the first successful recovery
+            if (!recovered) recovered = addr;
+          } catch {
+            // wrong v, try the other
+          }
+        }
+        setRecoveredAddress(recovered);
+      } catch (e) {
+        console.error("[agent] ecrecover failed:", e);
+        setRecoveredAddress(null);
+      }
+
       setSignStatus("done");
     } catch (e) {
       setSignError(e instanceof Error ? e.message : String(e));
@@ -284,15 +318,20 @@ function AgentSimulatorPage() {
             {authStatus === "connecting" ? "Authenticating..." : "Authenticate as Agent"}
           </button>
           {authStatus === "connected" && (
-            <div className="flex items-center gap-2">
-              <div className="h-2.5 w-2.5 rounded-full bg-success-500" />
-              <span className="text-xs text-success-700">
-                Connected — {agentIdentity} / {agentKeyId?.slice(-12)}
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-success-500" />
+              <span className="text-xs text-success-700 font-mono break-all">
+                {agentKeyId}
               </span>
             </div>
           )}
         </div>
         {authError && <p className="mt-2 text-xs text-error-600">{authError}</p>}
+        {signerAddress && (
+          <p className="mt-2 text-xs text-neutral-400">
+            Signer: <span className="font-mono text-neutral-500">{signerAddress}</span>
+          </p>
+        )}
       </div>
 
       {/* Sign Payload */}
@@ -360,6 +399,28 @@ function AgentSimulatorPage() {
                     {signature}
                   </pre>
                 </div>
+                {recoveredAddress && (
+                  <div className={`rounded-lg border p-2 ${
+                    signerAddress && recoveredAddress.toLowerCase() === signerAddress.toLowerCase()
+                      ? "border-success-200 bg-success-50"
+                      : "border-error-200 bg-error-50"
+                  }`}>
+                    <p className="text-xs font-mono break-all">
+                      ecrecover: {recoveredAddress}
+                    </p>
+                    {signerAddress && (
+                      <p className={`text-xs mt-1 ${
+                        recoveredAddress.toLowerCase() === signerAddress.toLowerCase()
+                          ? "text-success-700"
+                          : "text-error-700"
+                      }`}>
+                        {recoveredAddress.toLowerCase() === signerAddress.toLowerCase()
+                          ? "Matches sub-key address"
+                          : `Mismatch! Expected ${signerAddress}`}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs text-success-600">
                   Payment authorization signed for {preset.contractName} on chain {preset.chainId}
                 </p>
