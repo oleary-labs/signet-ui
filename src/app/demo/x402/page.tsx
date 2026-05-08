@@ -397,7 +397,7 @@ export default function X402DemoPage() {
                 </button>
               </div>
               <Link
-                href={`/demo/x402/agent?token=${encodeURIComponent(delegationToken)}`}
+                href={`/demo/x402/agent?token=${encodeURIComponent(delegationToken)}&address=${encodeURIComponent(subKeyAddress ?? "")}`}
                 className="inline-block rounded-lg border border-accent-300 bg-accent-50 px-4 py-2 text-sm font-semibold text-accent-700 hover:bg-accent-100 transition-colors"
               >
                 Open Agent Simulator &rarr;

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { generateSessionKeypair } from "@/lib/signet-sdk/session";
 import { authenticateWithDelegation } from "@/lib/signet-sdk/delegate";
 import { signTypedData, CHAIN_PRESETS, type EIP712TypedData } from "@/lib/signet-sdk/scopedSign";
+import { x402Fetch } from "@/lib/signet-sdk/x402";
 import { env } from "@/config/env";
 import type { SessionKeypair, IdTokenClaims } from "@/lib/signet-sdk/types";
 import Link from "next/link";
@@ -32,9 +33,11 @@ export default function AgentSimulatorPageWrapper() {
 function AgentSimulatorPage() {
   const searchParams = useSearchParams();
   const tokenFromUrl = searchParams.get("token");
+  const addressFromUrl = searchParams.get("address");
 
   // Token input
   const [token, setToken] = useState(tokenFromUrl ?? "");
+  const [signerAddress, setSignerAddress] = useState(addressFromUrl ?? "");
 
   // Agent session
   const [agentKeypair, setAgentKeypair] = useState<SessionKeypair | null>(null);
@@ -51,6 +54,13 @@ function AgentSimulatorPage() {
   const [signature, setSignature] = useState<string | null>(null);
   const [ecdsaSignature, setEcdsaSignature] = useState<string | null>(null);
   const [signError, setSignError] = useState<string | null>(null);
+
+  // x402 API query
+  const [queryAddress, setQueryAddress] = useState("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"); // vitalik.eth
+  const [queryStatus, setQueryStatus] = useState<"idle" | "requesting" | "paying" | "done" | "error">("idle");
+  const [queryError, setQueryError] = useState<string | null>(null);
+  const [queryResult, setQueryResult] = useState<Record<string, unknown> | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<{ amount: string; network: string } | null>(null);
 
   // Pre-fill from URL
   useEffect(() => {
@@ -163,6 +173,75 @@ function AgentSimulatorPage() {
     } catch (e) {
       setSignError(e instanceof Error ? e.message : String(e));
       setSignStatus("error");
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Query x402 API (Nansen)
+  // ---------------------------------------------------------------------------
+
+  async function queryNansen() {
+    if (!agentKeypair || !agentKeyId || !agentIdentity) return;
+    setQueryStatus("requesting");
+    setQueryError(null);
+    setQueryResult(null);
+    setPaymentInfo(null);
+
+    try {
+      const dummyClaims = { iss: "", sub: "", email: "", azp: "", aud: "", exp: 0, iat: 0 } as IdTokenClaims;
+
+      const { response, paid, paymentDetails } = await x402Fetch(
+        "/api/x402",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-target-url": "https://api.nansen.ai/api/v1/profiler/address/current-balance",
+            "x-target-method": "POST",
+          },
+          body: JSON.stringify({
+            address: queryAddress,
+            chain: "ethereum",
+            hide_spam_token: true,
+            pagination: { page: 1, per_page: 5 },
+          }),
+        },
+        {
+          signerAddress: signerAddress || "0x0000000000000000000000000000000000000000",
+          preferredNetwork: "eip155:8453",
+          signTypedData: async (typedData) => {
+            setQueryStatus("paying");
+            const result = await signTypedData(
+              DEMO_NODES[0],
+              PROXY,
+              DEMO_GROUP,
+              agentKeyId!,
+              "ecdsa_secp256k1",
+              typedData as EIP712TypedData,
+              agentKeypair!,
+              dummyClaims,
+              agentIdentity ?? undefined,
+            );
+            return result.ecdsaSignature;
+          },
+        },
+      );
+
+      if (paid && paymentDetails) {
+        setPaymentInfo({ amount: paymentDetails.amount, network: paymentDetails.network });
+      }
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`API returned ${response.status}: ${body}`);
+      }
+
+      const data = await response.json();
+      setQueryResult(data);
+      setQueryStatus("done");
+    } catch (e) {
+      setQueryError(e instanceof Error ? e.message : String(e));
+      setQueryStatus("error");
     }
   }
 
@@ -284,6 +363,60 @@ function AgentSimulatorPage() {
                 <p className="text-xs text-success-600">
                   Payment authorization signed for {preset.contractName} on chain {preset.chainId}
                 </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* x402 API Query */}
+      {authStatus === "connected" && (
+        <div className="mb-8 rounded-lg border border-neutral-200 bg-white p-6">
+          <h2 className="text-lg font-semibold text-primary-900 mb-4">
+            Query x402 API (Nansen)
+          </h2>
+          <p className="text-xs text-neutral-500 mb-4">
+            Make a real API request. If the server returns HTTP 402, the agent
+            automatically signs a USDC payment authorization and retries.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Ethereum Address to Look Up</label>
+              <input
+                type="text"
+                value={queryAddress}
+                onChange={(e) => setQueryAddress(e.target.value)}
+                className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-mono text-primary-900"
+              />
+            </div>
+
+            <button
+              onClick={queryNansen}
+              disabled={queryStatus === "requesting" || queryStatus === "paying"}
+              className="rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
+            >
+              {queryStatus === "requesting" ? "Requesting..." :
+               queryStatus === "paying" ? "Signing payment..." :
+               "Query Nansen ($0.01 USDC)"}
+            </button>
+
+            {queryError && <p className="text-xs text-error-600">{queryError}</p>}
+
+            {paymentInfo && (
+              <div className="rounded-lg border border-accent-200 bg-accent-50 p-3">
+                <p className="text-xs text-accent-700">
+                  Paid {parseInt(paymentInfo.amount) / 1e6} USDC on {paymentInfo.network}
+                </p>
+              </div>
+            )}
+
+            {queryResult && (
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Response</label>
+                <pre className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs font-mono text-primary-900 overflow-x-auto max-h-64 overflow-y-auto">
+                  {JSON.stringify(queryResult, null, 2)}
+                </pre>
               </div>
             )}
           </div>
