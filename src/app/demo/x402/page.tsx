@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { SignInButton, SignOutButton, useUser, useAuth } from "@clerk/nextjs";
 import { generateSessionKeypair } from "@/lib/signet-sdk/session";
 import { generateJWTProof, getJWTModulusBytes } from "@/lib/signet-sdk/proof";
@@ -42,6 +42,7 @@ export default function X402DemoPage() {
   // Parent key
   const [parentKeyId, setParentKeyId] = useState<string | null>(null);
   const [parentAddress, setParentAddress] = useState<string | null>(null);
+  const [parentAlreadyExisted, setParentAlreadyExisted] = useState(false);
   const [parentStatus, setParentStatus] = useState<"idle" | "creating" | "done" | "error">("idle");
 
   // Sub-key
@@ -147,12 +148,20 @@ export default function X402DemoPage() {
       );
       setParentKeyId(result.keyId);
       setParentAddress(result.ethereumAddress);
+      setParentAlreadyExisted(result.alreadyExisted);
       setParentStatus("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setParentStatus("error");
     }
   }, [ensureSession]);
+
+  // Auto-create parent key when session is established
+  useEffect(() => {
+    if (sessionStatus === "connected" && parentStatus === "idle") {
+      createParentKey();
+    }
+  }, [sessionStatus, parentStatus, createParentKey]);
 
   // ---------------------------------------------------------------------------
   // Create scoped sub-key (ECDSA, EIP-712 domain)
@@ -290,23 +299,29 @@ export default function X402DemoPage() {
         {sessionError && <p className="mt-2 text-xs text-error-600">{sessionError}</p>}
       </Section>
 
-      {/* Step 2: Parent Key */}
-      <Section number={2} title="Create Parent Key" done={parentStatus === "done"} disabled={sessionStatus !== "connected"}>
+      {/* Step 2: Parent Key (auto-created after session) */}
+      <Section number={2} title="Parent Key" done={parentStatus === "done"} disabled={sessionStatus !== "connected"}>
         {parentStatus === "done" ? (
           <div className="space-y-1">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                parentAlreadyExisted
+                  ? "bg-neutral-100 text-neutral-600"
+                  : "bg-success-50 text-success-700"
+              }`}>
+                {parentAlreadyExisted ? "Found existing" : "Created"}
+              </span>
+              <span className="text-xs text-neutral-400">ECDSA secp256k1, unscoped</span>
+            </div>
             <Row label="Key ID" value={parentKeyId!} mono />
             <Row label="Address" value={parentAddress!} mono />
-            <p className="text-xs text-neutral-400 mt-2">ECDSA secp256k1, unscoped</p>
           </div>
-        ) : (
-          <button
-            onClick={createParentKey}
-            disabled={parentStatus === "creating" || sessionStatus !== "connected"}
-            className="rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
-          >
-            {parentStatus === "creating" ? "Creating..." : "Create Parent Key"}
-          </button>
-        )}
+        ) : parentStatus === "creating" ? (
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-4 rounded-full border-2 border-accent-500 border-t-transparent animate-spin" />
+            <span className="text-sm text-neutral-500">Creating parent key...</span>
+          </div>
+        ) : null}
       </Section>
 
       {/* Step 3: Scoped Sub-Key */}
