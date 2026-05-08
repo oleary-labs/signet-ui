@@ -363,19 +363,13 @@ function AgentSimulatorPage() {
 
             {signError && <p className="text-xs text-error-600">{signError}</p>}
 
-            {signature && (
+            {ecdsaSignature && (
               <div className="space-y-2 mt-4">
                 <div>
-                  <label className="block text-xs text-neutral-500 mb-1">ECDSA Signature</label>
-                  <pre className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs font-mono text-primary-900 break-all">
+                  <label className="block text-xs text-neutral-500 mb-1">ECDSA Signature (65 bytes)</label>
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs font-mono text-primary-900 break-all overflow-hidden">
                     {ecdsaSignature}
-                  </pre>
-                </div>
-                <div>
-                  <label className="block text-xs text-neutral-500 mb-1">Raw Signature</label>
-                  <pre className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs font-mono text-neutral-500 break-all">
-                    {signature}
-                  </pre>
+                  </div>
                 </div>
                 {recoveredAddress && (
                   <div className={`rounded-lg border p-2 ${
@@ -429,6 +423,8 @@ function AgentSimulatorPage() {
                 className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-mono text-primary-900"
               />
             </div>
+
+            <p className="text-xs font-mono text-neutral-400">POST https://api.nansen.ai/api/v1/profiler/address/current-balance</p>
 
             <button
               onClick={queryNansen}
