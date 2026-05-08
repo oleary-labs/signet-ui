@@ -65,9 +65,9 @@ export async function requestDelegation(
   claims: IdTokenClaims,
   identity?: string,
 ): Promise<DelegationResult> {
-  // Build session-authenticated request with the sub-key's suffix.
-  // The node resolves the full sub-key ID from session identity + suffix,
-  // and derives the parent key ID by stripping the suffix.
+  // Build session-authenticated request.
+  // Try with suffix in the canonical hash — if the node resolves the key
+  // from session + suffix, the signature must cover the suffixed key ID.
   const signReq = await signKeygenRequest(
     sessionKeypair,
     claims,
@@ -75,6 +75,8 @@ export async function requestDelegation(
     keySuffix,
     identity,
   );
+
+  console.log("[delegate] request:", { keySuffix, parentKeyId, curve, key_suffix_in_sig: signReq.key_suffix });
 
   const res = await fetch(proxyEndpoint, {
     method: "POST",

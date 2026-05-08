@@ -168,7 +168,8 @@ export default function X402DemoPage() {
       const scope = buildEIP712Scope(preset.chainId, preset.verifyingContract);
       setSubKeyScope(scope);
 
-      // Scope hash becomes the key suffix (first 8 bytes of SHA-256)
+      // Compute suffix from scope (same as node does: first 8 bytes of SHA-256)
+      // Needed for request signature canonical hash
       const scopeBytes = new Uint8Array(
         scope.slice(2).match(/.{2}/g)!.map((b) => parseInt(b, 16)),
       );
@@ -177,6 +178,7 @@ export default function X402DemoPage() {
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
 
+      // Send suffix in request signature (for auth) + scope in body (for key creation)
       const result = await keygen(
         { nodeUrls: DEMO_NODES, groupId: DEMO_GROUP, proxyEndpoint: PROXY },
         keypair,

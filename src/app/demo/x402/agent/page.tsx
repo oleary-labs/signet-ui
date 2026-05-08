@@ -112,6 +112,12 @@ function AgentSimulatorPage() {
           verifyingContract: preset.verifyingContract,
         },
         types: {
+          EIP712Domain: [
+            { name: "name", type: "string" },
+            { name: "version", type: "string" },
+            { name: "chainId", type: "uint256" },
+            { name: "verifyingContract", type: "address" },
+          ],
           TransferWithAuthorization: [
             { name: "from", type: "address" },
             { name: "to", type: "address" },
@@ -133,6 +139,9 @@ function AgentSimulatorPage() {
         },
       };
 
+      console.log("[agent] sign: identity=" + agentIdentity + " keyId=" + agentKeyId);
+      console.log("[agent] typed_data:", JSON.stringify(typedData, null, 2));
+
       // Dummy claims — the delegation session uses the token's identity, not OAuth claims
       const dummyClaims = { iss: "", sub: "", email: "", azp: "", aud: "", exp: 0, iat: 0 } as IdTokenClaims;
 
@@ -140,7 +149,7 @@ function AgentSimulatorPage() {
         DEMO_NODES[0],
         PROXY,
         DEMO_GROUP,
-        agentKeyId,
+        agentKeyId!,
         "ecdsa_secp256k1",
         typedData,
         agentKeypair,

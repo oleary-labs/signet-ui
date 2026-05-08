@@ -7,7 +7,7 @@
  */
 
 import type { SessionKeypair, IdTokenClaims } from "./types";
-import { signSignRequest } from "./request";
+import { signKeygenRequest } from "./request";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -93,13 +93,18 @@ export async function signTypedData(
   claims: IdTokenClaims,
   identity?: string,
 ): Promise<ScopedSignResult> {
-  // Build session-authenticated request (empty message hash — payload replaces it)
-  const signReq = await signSignRequest(
+  // Build session-authenticated request (no message hash — payload is sent separately)
+  // The canonical hash must use the full sub-key ID (identity + suffix).
+  // Extract suffix from keyId: "oauth:iss:sub:suffix" → suffix is last segment
+  // The identity param is "iss:sub", so we need to add the suffix.
+  const keyParts = keyId.split(":");
+  const keySuffix = keyParts.length > 1 ? keyParts[keyParts.length - 1] : undefined;
+
+  const signReq = await signKeygenRequest(
     sessionKeypair,
     claims,
     groupId,
-    new Uint8Array(0),
-    undefined,
+    keySuffix,
     identity,
   );
 
@@ -156,6 +161,22 @@ export const CHAIN_PRESETS = [
     chainId: 84532,
     contractName: "USDC",
     verifyingContract: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    eip712Name: "USD Coin",
+    eip712Version: "2",
+  },
+  {
+    label: "USDC on Ethereum",
+    chainId: 1,
+    contractName: "USDC",
+    verifyingContract: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    eip712Name: "USD Coin",
+    eip712Version: "2",
+  },
+  {
+    label: "USDC on Sepolia",
+    chainId: 11155111,
+    contractName: "USDC",
+    verifyingContract: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     eip712Name: "USD Coin",
     eip712Version: "2",
   },
