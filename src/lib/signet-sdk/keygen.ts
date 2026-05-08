@@ -57,8 +57,6 @@ export async function keygen(
   if (curve) body.curve = curve;
   if (scope) body.scope = scope;
 
-  console.log("[keygen] request body:", JSON.stringify({ curve: body.curve, scope: body.scope, key_suffix: body.key_suffix }));
-
   const res = await fetch(url, {
     method: "POST",
     headers,

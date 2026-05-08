@@ -56,13 +56,6 @@ export async function signKeygenRequest(
   const timestamp = Math.floor(Date.now() / 1000);
 
   const hash = await canonicalRequestHash(normalizedGroupId, keyId, nonce, timestamp);
-  console.log("[request-sig] canonical hash inputs:", {
-    groupId: normalizedGroupId,
-    keyId,
-    nonce,
-    timestamp,
-    hashHex: Array.from(hash).map(b => b.toString(16).padStart(2, "0")).join(""),
-  });
   const sig = await signHash(keypair.privateKey, hash);
 
   return {

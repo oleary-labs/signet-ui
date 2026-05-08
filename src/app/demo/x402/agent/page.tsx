@@ -151,8 +151,6 @@ function AgentSimulatorPage() {
         },
       };
 
-      console.log("[agent] sign: identity=" + agentIdentity + " keyId=" + agentKeyId);
-      console.log("[agent] typed_data:", JSON.stringify(typedData, null, 2));
 
       // Dummy claims — the delegation session uses the token's identity, not OAuth claims
       const dummyClaims = { iss: "", sub: "", email: "", azp: "", aud: "", exp: 0, iat: 0 } as IdTokenClaims;
@@ -173,30 +171,10 @@ function AgentSimulatorPage() {
       setEcdsaSignature(result.ecdsaSignature);
 
       // Client-side ecrecover verification
-      // Node returns 64-byte sig (r || s) without v. Try both v=27 and v=28.
       try {
-        const hash = hashTypedData({
-          domain: typedData.domain as Parameters<typeof hashTypedData>[0]["domain"],
-          types: typedData.types,
-          primaryType: typedData.primaryType,
-          message: typedData.message,
-        });
-        const sig64 = result.ecdsaSignature;
-        let recovered: string | null = null;
-        for (const v of ["1b", "1c"]) { // 0x1b = 27, 0x1c = 28
-          try {
-            const sigWithV = `${sig64}${v}` as Hex;
-            const addr = await recoverAddress({ hash, signature: sigWithV });
-            if (signerAddress && addr.toLowerCase() === signerAddress.toLowerCase()) {
-              recovered = addr;
-              break;
-            }
-            // If no signerAddress to match, take the first successful recovery
-            if (!recovered) recovered = addr;
-          } catch {
-            // wrong v, try the other
-          }
-        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const hash = hashTypedData(typedData as any);
+        const recovered = await recoverAddress({ hash, signature: result.ecdsaSignature as Hex });
         setRecoveredAddress(recovered);
       } catch (e) {
         console.error("[agent] ecrecover failed:", e);

@@ -332,11 +332,25 @@ export default function X402DemoPage() {
           )}
 
           {subKeyStatus === "done" ? (
-            <div className="space-y-1">
+            <div className="space-y-2">
               <Row label="Sub-Key ID" value={subKeyId!} mono />
-              <Row label="Address" value={subKeyAddress!} mono />
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-neutral-500">Address</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-primary-900">{subKeyAddress}</span>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(subKeyAddress!); }}
+                    className="rounded border border-neutral-200 px-1.5 py-0.5 text-xs text-neutral-500 hover:bg-neutral-50"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
               <p className="text-xs text-neutral-400">
                 Scoped to {preset.eip712Name} on chain {preset.chainId}
+              </p>
+              <p className="text-xs text-accent-600">
+                Fund this address with USDC on Base to enable x402 payments.
               </p>
             </div>
           ) : (

@@ -76,7 +76,7 @@ export async function requestDelegation(
     identity,
   );
 
-  console.log("[delegate] request:", { keySuffix, parentKeyId, curve, key_suffix_in_sig: signReq.key_suffix });
+
 
   const res = await fetch(proxyEndpoint, {
     method: "POST",
