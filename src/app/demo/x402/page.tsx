@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { SignInButton, SignOutButton, useUser, useAuth } from "@clerk/nextjs";
+import { authClient } from "@/lib/auth-client";
 import { generateSessionKeypair } from "@/lib/signet-sdk/session";
 import { generateJWTProof, getJWTModulusBytes } from "@/lib/signet-sdk/proof";
 import { generateServerProof } from "@/lib/signet-sdk/server-prover";
@@ -29,8 +29,8 @@ const PROXY = "/api/node/proxy";
 // ---------------------------------------------------------------------------
 
 export default function X402DemoPage() {
-  const { isSignedIn, user } = useUser();
-  const { getToken } = useAuth();
+  const { data: session } = authClient.useSession();
+  const isSignedIn = !!session?.user;
 
   // Session state
   const [sessionKeypair, setSessionKeypair] = useState<SessionKeypair | null>(null);
@@ -77,8 +77,9 @@ export default function X402DemoPage() {
       return { keypair: sessionKeypair, claims };
     }
 
-    const jwt = await getToken();
-    if (!jwt) throw new Error("No Clerk token available");
+    const tokenRes = await authClient.token();
+    if (tokenRes.error || !tokenRes.data) throw new Error("No auth token available");
+    const jwt = tokenRes.data.token;
 
     const decoded = decodeIdToken(jwt);
 
@@ -112,7 +113,7 @@ export default function X402DemoPage() {
     sessionExpiryRef.current = decoded.exp;
     setSessionStatus("connected");
     return { keypair, claims: decoded };
-  }, [getToken, sessionKeypair, claims]);
+  }, [sessionKeypair, claims]);
 
   const establishSession = useCallback(async () => {
     setSessionStatus("connecting");
@@ -257,30 +258,34 @@ export default function X402DemoPage() {
       <Section number={1} title="Authenticate" done={sessionStatus === "connected"}>
         {!isSignedIn ? (
           <div className="text-center py-6">
-            <SignInButton mode="modal">
-              <button className="rounded-lg bg-accent-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-accent-600 transition-colors">
-                Sign In with Clerk
-              </button>
-            </SignInButton>
+            <button
+              onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/demo/x402" })}
+              className="rounded-lg bg-accent-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-accent-600 transition-colors"
+            >
+              Sign In with Google
+            </button>
           </div>
         ) : sessionStatus === "connected" ? (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-2.5 w-2.5 rounded-full bg-success-500" />
               <div>
-                <p className="text-sm font-medium text-primary-900">{user?.primaryEmailAddress?.emailAddress}</p>
+                <p className="text-sm font-medium text-primary-900">{session.user.email}</p>
                 <p className="text-xs text-neutral-400">Session established with {DEMO_NODES.length} nodes</p>
               </div>
             </div>
-            <SignOutButton redirectUrl="/demo/x402">
-              <button className="text-xs text-neutral-400 hover:text-neutral-600">Sign Out</button>
-            </SignOutButton>
+            <button
+              onClick={() => authClient.signOut({ fetchOptions: { onSuccess: () => window.location.reload() } })}
+              className="text-xs text-neutral-400 hover:text-neutral-600"
+            >
+              Sign Out
+            </button>
           </div>
         ) : (
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-primary-900">{user?.primaryEmailAddress?.emailAddress}</p>
-              <p className="text-xs text-neutral-400">Signed in via Clerk. Connect to Signet to continue.</p>
+              <p className="text-sm text-primary-900">{session?.user?.email}</p>
+              <p className="text-xs text-neutral-400">Signed in. Connect to Signet to continue.</p>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -290,9 +295,12 @@ export default function X402DemoPage() {
               >
                 {sessionStatus === "connecting" ? "Connecting..." : "Connect to Signet"}
               </button>
-              <SignOutButton>
-                <button className="text-xs text-neutral-400 hover:text-neutral-600">Sign Out</button>
-              </SignOutButton>
+              <button
+                onClick={() => authClient.signOut({ fetchOptions: { onSuccess: () => window.location.reload() } })}
+                className="text-xs text-neutral-400 hover:text-neutral-600"
+              >
+                Sign Out
+              </button>
             </div>
           </div>
         )}
