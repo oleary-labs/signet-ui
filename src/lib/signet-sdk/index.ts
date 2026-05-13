@@ -1,25 +1,43 @@
 /**
- * Signet SDK
+ * Signet DKMS SDK
  *
- * Framework-agnostic library for Signet protocol interactions:
- * - OAuth authentication (Google PKCE)
- * - Client-side ZK proof generation for JWT claims (noir + bb.js WASM)
- * - Bootstrap group session registration
- * - Session key management (secp256k1)
+ * Framework-agnostic library for Signet protocol interactions.
+ *
+ * This barrel export includes only the core modules that have no heavy
+ * dependencies. For ZK proof generation (client-side), import directly:
+ *
+ *   import { generateJWTProof } from "@oleary-labs/signet-sdk/proof"
+ *   import { buildFullWitness } from "@oleary-labs/signet-sdk/witness"
+ *
+ * These require @noir-lang/noir_js, @aztec/bb.js, and
+ * @oleary-labs/signet-circuits as peer dependencies.
  */
 
+// Core
 export * from "./types";
-export * from "./oauth";
 export * from "./session";
-export * from "./jwt";
-export * from "./jwks";
-export * from "./witness";
-export * from "./proof";
-export * from "./bootstrap";
 export * from "./request";
 export * from "./keygen";
-export * from "./userop";
-export * from "./admin";
+
+// Auth (lightweight — no WASM)
+export * from "./oauth";
+export * from "./jwt";
+export * from "./jwks";
+export * from "./bootstrap";
 export * from "./authkey-session";
 export * from "./server-prover";
-export { generateInputs, splitBigIntToChunks } from "./generate-inputs";
+
+// Admin
+export * from "./admin";
+
+// Signing + Delegation
+export * from "./delegate";
+export * from "./scopedSign";
+export * from "./frostVerify";
+
+// x402
+export * from "./x402";
+
+// ERC-4337
+export * from "./userop";
+export * from "./bundler";
