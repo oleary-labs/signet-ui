@@ -17,7 +17,7 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     async function process() {
       try {
-        const jwt = await handleOAuthCallback("/api/auth/oauth-token");
+        const jwt = await handleOAuthCallback("/api/auth/token");
 
         // Store the JWT for the auth provider to pick up on remount
         sessionStorage.setItem("signet_id_token", jwt);

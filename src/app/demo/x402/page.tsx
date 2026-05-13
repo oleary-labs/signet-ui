@@ -1,12 +1,8 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
-import { authClient } from "@/lib/auth-client";
-import { generateSessionKeypair } from "@/lib/signet-sdk/session";
-import { generateJWTProof, getJWTModulusBytes } from "@/lib/signet-sdk/proof";
-import { generateServerProof } from "@/lib/signet-sdk/server-prover";
-import { authenticateWithBootstrap } from "@/lib/signet-sdk/bootstrap";
-import { decodeIdToken } from "@/lib/signet-sdk/oauth";
+import { useState, useCallback, useEffect } from "react";
+import { useSignetAuth } from "@/hooks/useSignetAuth";
+import { sessionKeyMaterial } from "@/providers/signetAuth";
 import { keygen } from "@/lib/signet-sdk/keygen";
 import { requestDelegation } from "@/lib/signet-sdk/delegate";
 import { buildEIP712Scope, CHAIN_PRESETS } from "@/lib/signet-sdk/scopedSign";
@@ -18,8 +14,6 @@ import Link from "next/link";
 // Config
 // ---------------------------------------------------------------------------
 
-// Target group for the demo — must have Clerk's issuer registered
-// TODO: make this configurable via env var
 const DEMO_GROUP = process.env.NEXT_PUBLIC_X402_GROUP ?? env.bootstrapGroup;
 const DEMO_NODES = (process.env.NEXT_PUBLIC_X402_NODES ?? env.bootstrapNodes.join(",")).split(",").filter(Boolean);
 const PROXY = "/api/node/proxy";
@@ -29,15 +23,7 @@ const PROXY = "/api/node/proxy";
 // ---------------------------------------------------------------------------
 
 export default function X402DemoPage() {
-  const { data: session } = authClient.useSession();
-  const isSignedIn = !!session?.user;
-
-  // Session state
-  const [sessionKeypair, setSessionKeypair] = useState<SessionKeypair | null>(null);
-  const [claims, setClaims] = useState<IdTokenClaims | null>(null);
-  const [sessionStatus, setSessionStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
-  const [sessionError, setSessionError] = useState<string | null>(null);
-  const sessionExpiryRef = useRef<number>(0); // unix seconds when session expires
+  const { isAuthenticated, signIn, status: authStatus, claims, groupPublicKey } = useSignetAuth();
 
   // Parent key
   const [parentKeyId, setParentKeyId] = useState<string | null>(null);
@@ -62,87 +48,19 @@ export default function X402DemoPage() {
   const [copied, setCopied] = useState(false);
 
   // ---------------------------------------------------------------------------
-  // Establish Signet session from Clerk JWT
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Re-authenticate with group nodes using a fresh Clerk JWT.
-   * Reuses the existing session keypair if available, otherwise generates one.
-   * Returns the keypair and claims for immediate use.
-   */
-  const ensureSession = useCallback(async (): Promise<{ keypair: SessionKeypair; claims: IdTokenClaims }> => {
-    // Reuse existing session if still valid (with 10s safety margin)
-    const now = Math.floor(Date.now() / 1000);
-    if (sessionKeypair && claims && sessionExpiryRef.current > now + 10) {
-      return { keypair: sessionKeypair, claims };
-    }
-
-    const tokenRes = await authClient.token();
-    if (tokenRes.error || !tokenRes.data) throw new Error("No auth token available");
-    const jwt = tokenRes.data.token;
-
-    const decoded = decodeIdToken(jwt);
-
-    // Reuse existing keypair or generate a new one
-    let keypair = sessionKeypair;
-    if (!keypair) {
-      keypair = await generateSessionKeypair();
-      setSessionKeypair(keypair);
-    }
-
-    // Generate ZK proof and authenticate
-    let proof: Uint8Array;
-    let modulusBytes: Uint8Array;
-
-    if (env.useServerProver) {
-      const result = await generateServerProof("/api/bundler", jwt, keypair.publicKeyHex);
-      proof = result.proof;
-      modulusBytes = result.jwksModulus;
-    } else {
-      const clientResult = await generateJWTProof(jwt, keypair.publicKeyHex);
-      proof = clientResult.proof;
-      modulusBytes = await getJWTModulusBytes(jwt);
-    }
-
-    await authenticateWithBootstrap(
-      { groupId: DEMO_GROUP, nodeUrls: DEMO_NODES, proxyEndpoint: PROXY },
-      proof, keypair.publicKeyHex, decoded, modulusBytes,
-    );
-
-    setClaims(decoded);
-    sessionExpiryRef.current = decoded.exp;
-    setSessionStatus("connected");
-    return { keypair, claims: decoded };
-  }, [sessionKeypair, claims]);
-
-  const establishSession = useCallback(async () => {
-    setSessionStatus("connecting");
-    setSessionError(null);
-    try {
-      await ensureSession();
-      setSessionStatus("connected");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("[x402] session error:", e);
-      setSessionError(msg);
-      setSessionStatus("error");
-    }
-  }, [ensureSession]);
-
-  // ---------------------------------------------------------------------------
-  // Create parent key (ECDSA, unscoped)
+  // Create parent key (ECDSA, unscoped) — auto-triggered after auth
   // ---------------------------------------------------------------------------
 
   const createParentKey = useCallback(async () => {
+    if (!sessionKeyMaterial.keypair || !claims) return;
     setParentStatus("creating");
     setError(null);
 
     try {
-      const { keypair, claims: freshClaims } = await ensureSession();
       const result = await keygen(
         { nodeUrls: DEMO_NODES, groupId: DEMO_GROUP, proxyEndpoint: PROXY },
-        keypair,
-        freshClaims,
+        sessionKeyMaterial.keypair,
+        claims,
         undefined, // no suffix = parent key
         undefined, // no identity override
         "ecdsa_secp256k1",
@@ -155,31 +73,30 @@ export default function X402DemoPage() {
       setError(e instanceof Error ? e.message : String(e));
       setParentStatus("error");
     }
-  }, [ensureSession]);
+  }, [claims]);
 
-  // Auto-create parent key when session is established
+  // Auto-create parent key when authenticated
   useEffect(() => {
-    if (sessionStatus === "connected" && parentStatus === "idle") {
+    if (isAuthenticated && parentStatus === "idle" && sessionKeyMaterial.keypair && claims) {
       createParentKey();
     }
-  }, [sessionStatus, parentStatus, createParentKey]);
+  }, [isAuthenticated, parentStatus, claims, createParentKey]);
 
   // ---------------------------------------------------------------------------
   // Create scoped sub-key (ECDSA, EIP-712 domain)
   // ---------------------------------------------------------------------------
 
   const createSubKey = useCallback(async () => {
+    if (!sessionKeyMaterial.keypair || !claims) return;
     setSubKeyStatus("creating");
     setError(null);
 
     try {
-      const { keypair, claims: freshClaims } = await ensureSession();
       const preset = CHAIN_PRESETS[selectedPreset];
       const scope = buildEIP712Scope(preset.chainId, preset.verifyingContract);
       setSubKeyScope(scope);
 
-      // Compute suffix from scope (same as node does: first 8 bytes of SHA-256)
-      // Needed for request signature canonical hash
+      // Compute suffix from scope (same as node: first 8 bytes of SHA-256)
       const scopeBytes = new Uint8Array(
         scope.slice(2).match(/.{2}/g)!.map((b) => parseInt(b, 16)),
       );
@@ -188,11 +105,10 @@ export default function X402DemoPage() {
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
 
-      // Send suffix in request signature (for auth) + scope in body (for key creation)
       const result = await keygen(
         { nodeUrls: DEMO_NODES, groupId: DEMO_GROUP, proxyEndpoint: PROXY },
-        keypair,
-        freshClaims,
+        sessionKeyMaterial.keypair,
+        claims,
         suffix,
         undefined, // no identity override
         "ecdsa_secp256k1",
@@ -206,29 +122,28 @@ export default function X402DemoPage() {
       setError(e instanceof Error ? e.message : String(e));
       setSubKeyStatus("error");
     }
-  }, [ensureSession, selectedPreset]);
+  }, [claims, selectedPreset]);
 
   // ---------------------------------------------------------------------------
   // Mint delegation token
   // ---------------------------------------------------------------------------
 
   const mintDelegation = useCallback(async () => {
-    if (!subKeySuffix || !parentKeyId) return;
+    if (!subKeySuffix || !parentKeyId || !sessionKeyMaterial.keypair || !claims) return;
     setDelegateStatus("minting");
     setError(null);
 
     try {
-      const { keypair, claims: freshClaims } = await ensureSession();
       const result = await requestDelegation(
         DEMO_NODES[0],
         PROXY,
         DEMO_GROUP,
-        subKeySuffix!,
-        parentKeyId!,
+        subKeySuffix,
+        parentKeyId,
         "ecdsa_secp256k1",
         delegationExpiry,
-        keypair,
-        freshClaims,
+        sessionKeyMaterial.keypair,
+        claims,
       );
       setDelegationToken(result.token);
       setDelegateStatus("done");
@@ -236,7 +151,7 @@ export default function X402DemoPage() {
       setError(e instanceof Error ? e.message : String(e));
       setDelegateStatus("error");
     }
-  }, [ensureSession, subKeySuffix, parentKeyId, delegationExpiry]);
+  }, [subKeySuffix, parentKeyId, claims, delegationExpiry]);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -255,60 +170,30 @@ export default function X402DemoPage() {
       </div>
 
       {/* Step 1: Auth */}
-      <Section number={1} title="Authenticate" done={sessionStatus === "connected"}>
-        {!isSignedIn ? (
+      <Section number={1} title="Authenticate" done={isAuthenticated}>
+        {!isAuthenticated ? (
           <div className="text-center py-6">
             <button
-              onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/demo/x402" })}
-              className="rounded-lg bg-accent-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-accent-600 transition-colors"
+              onClick={signIn}
+              disabled={authStatus === "oauth"}
+              className="rounded-lg bg-accent-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
             >
-              Sign In with Google
-            </button>
-          </div>
-        ) : sessionStatus === "connected" ? (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-2.5 w-2.5 rounded-full bg-success-500" />
-              <div>
-                <p className="text-sm font-medium text-primary-900">{session.user.email}</p>
-                <p className="text-xs text-neutral-400">Session established with {DEMO_NODES.length} nodes</p>
-              </div>
-            </div>
-            <button
-              onClick={() => authClient.signOut({ fetchOptions: { onSuccess: () => window.location.reload() } })}
-              className="text-xs text-neutral-400 hover:text-neutral-600"
-            >
-              Sign Out
+              {authStatus === "oauth" ? "Signing in..." : "Sign In with Google"}
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-2.5 w-2.5 rounded-full bg-success-500" />
             <div>
-              <p className="text-sm text-primary-900">{session?.user?.email}</p>
-              <p className="text-xs text-neutral-400">Signed in. Connect to Signet to continue.</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={establishSession}
-                disabled={sessionStatus === "connecting"}
-                className="rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 transition-colors disabled:opacity-50"
-              >
-                {sessionStatus === "connecting" ? "Connecting..." : "Connect to Signet"}
-              </button>
-              <button
-                onClick={() => authClient.signOut({ fetchOptions: { onSuccess: () => window.location.reload() } })}
-                className="text-xs text-neutral-400 hover:text-neutral-600"
-              >
-                Sign Out
-              </button>
+              <p className="text-sm font-medium text-primary-900">{claims?.email}</p>
+              <p className="text-xs text-neutral-400">Session established with {DEMO_NODES.length} nodes</p>
             </div>
           </div>
         )}
-        {sessionError && <p className="mt-2 text-xs text-error-600">{sessionError}</p>}
       </Section>
 
-      {/* Step 2: Parent Key (auto-created after session) */}
-      <Section number={2} title="Parent Key" done={parentStatus === "done"} disabled={sessionStatus !== "connected"}>
+      {/* Step 2: Parent Key (auto-created after auth) */}
+      <Section number={2} title="Parent Key" done={parentStatus === "done"} disabled={!isAuthenticated}>
         {parentStatus === "done" ? (
           <div className="space-y-1">
             <div className="flex items-center gap-2 mb-1">
@@ -335,7 +220,6 @@ export default function X402DemoPage() {
       {/* Step 3: Scoped Sub-Key */}
       <Section number={3} title="Create Scoped Sub-Key" done={subKeyStatus === "done"} disabled={parentStatus !== "done"}>
         <div className="space-y-4">
-          {/* Preset selector */}
           <div>
             <label className="block text-xs text-neutral-500 mb-1">Target Chain + Contract</label>
             <select
