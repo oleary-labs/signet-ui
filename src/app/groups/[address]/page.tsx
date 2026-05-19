@@ -9,7 +9,7 @@ import { useGroupDetails, useRegisteredNodes, useRemovalRequests } from "@/hooks
 import { useSignetAuth } from "@/hooks/useSignetAuth";
 import { useTxStatus } from "@/providers/txStatus";
 import { sessionKeyMaterial } from "@/providers/signetAuth";
-import { adminRequest, type AdminAuthConfig } from "@/lib/signet-sdk/admin";
+import { adminRequest, type AdminAuthConfig } from "@oleary-labs/signet-sdk/admin";
 import { signetGroup } from "@/config/contracts";
 import { env } from "@/config/env";
 import { loadNodeRegistry, getNodeMetadata, type NodeRegistry, type NodeMetadata } from "@/lib/nodeRegistry";

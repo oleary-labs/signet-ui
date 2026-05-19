@@ -3,11 +3,11 @@
 import { useState, useCallback, useEffect } from "react";
 import { useSignetAuth } from "@/hooks/useSignetAuth";
 import { sessionKeyMaterial } from "@/providers/signetAuth";
-import { keygen } from "@/lib/signet-sdk/keygen";
-import { requestDelegation } from "@/lib/signet-sdk/delegate";
-import { buildEIP712Scope, CHAIN_PRESETS } from "@/lib/signet-sdk/scopedSign";
+import { keygen } from "@oleary-labs/signet-sdk/keygen";
+import { requestDelegation } from "@oleary-labs/signet-sdk/delegate";
+import { buildEIP712Scope, CHAIN_PRESETS } from "@oleary-labs/signet-sdk/scopedSign";
 import { env } from "@/config/env";
-import type { SessionKeypair, IdTokenClaims } from "@/lib/signet-sdk/types";
+import type { SessionKeypair, IdTokenClaims } from "@oleary-labs/signet-sdk/types";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------

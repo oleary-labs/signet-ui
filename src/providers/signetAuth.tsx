@@ -10,13 +10,13 @@ import {
 import { type Address, type Hex, createPublicClient, http } from "viem";
 import { getActiveChain } from "@/config/chains";
 import { signetAccountFactory } from "@/config/contracts";
-import { startGoogleOAuth, decodeIdToken } from "@/lib/signet-sdk/oauth";
-import { generateSessionKeypair, bytesToHex, hexToBytes } from "@/lib/signet-sdk/session";
-import { generateJWTProof, getJWTModulusBytes } from "@/lib/signet-sdk/proof";
-import { authenticateWithBootstrap } from "@/lib/signet-sdk/bootstrap";
-import { generateServerProof } from "@/lib/signet-sdk/server-prover";
-import { keygen } from "@/lib/signet-sdk/keygen";
-import type { IdTokenClaims, SessionKeypair } from "@/lib/signet-sdk/types";
+import { startGoogleOAuth, decodeIdToken } from "@oleary-labs/signet-sdk/oauth";
+import { generateSessionKeypair, bytesToHex, hexToBytes } from "@oleary-labs/signet-sdk/session";
+import { generateJWTProof, getJWTModulusBytes } from "@oleary-labs/signet-sdk/proof";
+import { authenticateWithBootstrap } from "@oleary-labs/signet-sdk/bootstrap";
+import { generateServerProof } from "@oleary-labs/signet-sdk/server-prover";
+import { keygen } from "@oleary-labs/signet-sdk/keygen";
+import type { IdTokenClaims, SessionKeypair } from "@oleary-labs/signet-sdk/types";
 import { env } from "@/config/env";
 
 /**

@@ -3,12 +3,12 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { hashTypedData, recoverAddress, type Hex } from "viem";
-import { generateSessionKeypair } from "@/lib/signet-sdk/session";
-import { authenticateWithDelegation } from "@/lib/signet-sdk/delegate";
-import { signTypedData, CHAIN_PRESETS, type EIP712TypedData } from "@/lib/signet-sdk/scopedSign";
-import { x402Fetch } from "@/lib/signet-sdk/x402";
+import { generateSessionKeypair } from "@oleary-labs/signet-sdk/session";
+import { authenticateWithDelegation } from "@oleary-labs/signet-sdk/delegate";
+import { signTypedData, CHAIN_PRESETS, type EIP712TypedData } from "@oleary-labs/signet-sdk/scopedSign";
+import { x402Fetch } from "@oleary-labs/signet-sdk/x402";
 import { env } from "@/config/env";
-import type { SessionKeypair, IdTokenClaims } from "@/lib/signet-sdk/types";
+import type { SessionKeypair, IdTokenClaims } from "@oleary-labs/signet-sdk/types";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
