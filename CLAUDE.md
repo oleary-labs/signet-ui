@@ -4,7 +4,7 @@
 
 ## What is this project?
 
-Signet Console is the web UI for the Signet protocol — a threshold signing network using FROST (RFC 9591) on secp256k1. The Console serves as:
+Signet Console is the web UI for the Signet protocol — a threshold signing network with a multi-scheme KMS (FROST/secp256k1, FROST/Ed25519, and threshold ECDSA/secp256k1). The Console's main flow uses FROST Schnorr over secp256k1; the `/demo/x402` route uses ECDSA scoped sub-keys. The Console serves as:
 
 1. **A public marketplace** where application developers discover and evaluate threshold signing providers (nodes run by companies).
 2. **A management dashboard** where developers create and operate signing groups.
@@ -32,9 +32,11 @@ The smart contracts and node code live in `../signet-protocol/`. Key paths:
 - `../signet-protocol/contracts/contracts/SignetGroup.sol` — per-group threshold config, membership, issuers, auth keys (BeaconProxy)
 - `../signet-protocol/contracts/contracts/SignetAccount.sol` — ERC-4337 smart account validated by FROST Schnorr signatures
 - `../signet-protocol/contracts/contracts/FROSTVerifier.sol` — on-chain FROST signature verification library
-- `../signet-protocol/node/` — Go node binary with HTTP API (/v1/health, /v1/info, /v1/keys, /v1/auth, /v1/keygen, /v1/sign)
+- `../signet-protocol/node/` — Go node binary with HTTP API (/v1/health, /v1/info, /v1/keys, /v1/auth, /v1/keygen, /v1/sign, /v1/delegate). All signing endpoints accept a `curve` parameter: `frost_secp256k1`, `frost_ed25519`, `ecdsa_secp256k1`.
+- `../signet-protocol/kms-tss/` — Rust gRPC KMS hosting all three signing schemes
 - `../signet-protocol/devnet/` — local devnet: deploys contracts, registers 3 nodes, creates a group
-- `../signet-min-bundler/` — ERC-4337 bundler for submitting UserOperations
+- `../signet-min-bundler/` — ERC-4337 bundler for submitting UserOperations, also serves `POST /v1/prove` for server-side ZK proof generation
+- `../signet-sdk/` — TypeScript client extracted from this repo. Consumed here as `@oleary-labs/signet-sdk@0.2.0` (npm). Provides session keys, OAuth/JWT helpers, keygen, scoped signing, delegation, ZK proof plumbing, x402, ERC-4337 helpers. Use the SDK rather than reimplementing these primitives.
 
 The contract ABIs in `src/lib/abi/` were extracted from `../signet-protocol/contracts/out/`. If contracts change, re-extract with:
 ```bash
@@ -114,7 +116,7 @@ src/
 │   └── userOp.ts               # ERC-4337 UserOperation construction
 ├── providers/
 │   ├── index.tsx               # wagmi + react-query + SignetAuth composition
-│   └── signetAuth.tsx          # Auth context provider (stubbed)
+│   └── signetAuth.tsx          # Auth context provider (Google OAuth → session key → bootstrap)
 └── components/
     ├── layout/Header.tsx       # Nav bar + sign in/out
     └── marketplace/
@@ -172,7 +174,25 @@ See `docs/TODO.md` for a detailed tracker. The short version:
 - Group detail — OAuth issuer and auth key sections are placeholder text
 - Time-lock queue (unified pending operations view) — placeholder
 - Deploy step of wizard — not connected to real UserOp submission
+- Standalone application key — `initialAuthKeys` currently passes the group public key, not a freshly generated standalone secp256k1 key with show-once UX
 - `node-registry.json` — empty, needs to be populated with real node metadata
+
+`docs/TODO.md` is the source of truth — this list may lag. Cross-check against the tracker before assuming an item is or isn't done.
+
+## /demo/x402 — the ECDSA path
+
+The Console's main flow is FROST. The `/demo/x402` route is the testbed for the second KMS scheme: ECDSA scoped sub-keys for AI-agent payments.
+
+End-to-end flow (`src/app/demo/x402/page.tsx` + `agent/page.tsx`):
+1. Operator side: `keygen({ curve: "ecdsa_secp256k1", scope })` mints a scoped sub-key bound to a `(chainId, contract)` pair.
+2. `requestDelegation({ curve: "ecdsa_secp256k1", ... })` mints a delegation JWT for an autonomous agent.
+3. Agent side: `authenticateWithDelegation()` exchanges the JWT for a session, then `signTypedData({ curve: "ecdsa_secp256k1", ... })` signs an EIP-712 `TransferWithAuthorization` (EIP-3009) payload.
+4. `x402Fetch()` runs the full x402 dance (request → 402 → sign → retry).
+5. Client-side `ecrecover` verifies the returned signature locally.
+
+All of this goes through `@oleary-labs/signet-sdk` — no signing primitives live in this repo. The same SDK is consumed by `signet-better-mcp` for its agent-facing tools.
+
+When changing scoped-signing behavior, change it in `signet-sdk` first, bump the npm version here, and update both the demo and `signet-better-mcp` together.
 
 ## Build & dev
 
