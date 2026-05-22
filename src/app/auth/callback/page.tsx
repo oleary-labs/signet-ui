@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { handleOAuthCallback, getOAuthReturnTo } from "@/lib/signet-sdk";
+import { handleOAuthCallback, getOAuthReturnTo } from "@oleary-labs/signet-sdk/oauth";
 
 /**
  * OAuth callback page.

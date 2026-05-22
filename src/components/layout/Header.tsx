@@ -31,7 +31,7 @@ export function Header() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <div className="flex items-center gap-8">
           <Link href="/" className="text-lg font-semibold text-primary-900">
-            Signet
+            Signet DKMS
           </Link>
           <nav className="flex items-center gap-6 text-sm text-neutral-500">
             <Link href="/" className="hover:text-primary-800 transition-colors">

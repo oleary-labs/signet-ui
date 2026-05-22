@@ -12,7 +12,7 @@ import {
 import { type Address, type Hex, type Abi } from "viem";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSignetWrite } from "@/hooks/useSignetWrite";
-import type { UserOpStatus } from "@/lib/signet-sdk/userop";
+import type { UserOpStatus } from "@oleary-labs/signet-sdk/userop";
 
 // ---------------------------------------------------------------------------
 // Types

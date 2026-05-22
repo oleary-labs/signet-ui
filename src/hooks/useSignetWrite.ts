@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { type Address, type Hex, encodeFunctionData, type Abi } from "viem";
 import { useSignetAuth } from "./useSignetAuth";
 import { sessionKeyMaterial } from "@/providers/signetAuth";
-import { submitUserOp, type UserOpStatus } from "@/lib/signet-sdk/userop";
+import { submitUserOp, type UserOpStatus } from "@oleary-labs/signet-sdk/userop";
 import { signetAccountFactory } from "@/config/contracts";
 import { env } from "@/config/env";
 
