@@ -48,6 +48,14 @@ cat ../signet-protocol/contracts/out/SignetFactory.sol/SignetFactory.json | pyth
 ### Auth model — NOT a normal wallet dApp
 This is NOT a standard wagmi "connect wallet" app. Users authenticate via **social login (OAuth)**, which flows through Signet's bootstrap signing group. Their on-chain identity is a **SignetAccount** (ERC-4337 smart account), not an EOA.
 
+> **Demo vs. production:** the current code collapses the group manager, admin
+> authenticator, and consumer roles into the single OAuth identity that runs
+> the wizard. That's intentional for the demo (frictionless onboarding) but
+> not appropriate for production custody. See
+> [docs/PROD-KEY-MODEL.md](docs/PROD-KEY-MODEL.md) for the role-split design
+> intent and the path to splitting manager (hardware wallet, direct EOA)
+> from user/consumer (OAuth, unchanged).
+
 - wagmi is used for **read-only contract calls** (useReadContract, useReadContracts) and chain configuration
 - wagmi is NOT used for transaction signing
 - All write operations go through: **construct UserOp → (optional) paymaster sponsorship via ERC-7677 → FROST threshold sign via bootstrap group → submit to bundler → EntryPoint executes**

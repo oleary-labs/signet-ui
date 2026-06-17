@@ -59,7 +59,7 @@ Implemented across `providers/signetAuth.tsx`, `hooks/useSignetWrite.ts`, `lib/s
 - [x] **Deploy step** — Wizard deploy step calls `SignetFactory.createGroup` via `useSignetWrite`. Includes invite code whitelist flow.
 - [x] **Transaction progress UI** — Real-time status: building → sponsoring → estimating → signing → submitting → confirming → success/error. Retry on failure.
 - [x] **Initial auth key** — User's bootstrap group public key added as initial Schnorr auth key during deploy.
-- [ ] **Standalone application key generation** — Generate a separate secp256k1 keypair during deploy with a "save your key" show-once UX (currently only the bootstrap group key is added).
+- [ ] **Standalone application key generation** — Generate a separate secp256k1 keypair during deploy with a "save your key" show-once UX (currently only the bootstrap group key is added). See [PROD-KEY-MODEL.md](PROD-KEY-MODEL.md) for the broader role-split this is the intermediate step toward.
 - [ ] **Post-deploy keygen trigger** — After on-chain confirmation, trigger DKG by calling `/v1/keygen` on one of the group's nodes.
 
 ### Marketplace enhancements
@@ -92,4 +92,4 @@ Implemented across `providers/signetAuth.tsx`, `hooks/useSignetWrite.ts`, `lib/s
 - [ ] Multi-account management
 - [ ] OAuth issuer setup in creation wizard
 - [ ] Node reputation metrics (uptime, response time, signing success rate)
-- [ ] "Bring your own key" option for application key provisioning
+- [ ] "Bring your own key" option for application key provisioning (hardware wallet / MetaMask path — see [PROD-KEY-MODEL.md](PROD-KEY-MODEL.md))
